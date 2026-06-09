@@ -77,3 +77,47 @@ export interface PaginatedChatMessages {
   items: ChatMessage[]
   nextCursor: string | null
 }
+
+export type ParticipantType = 'human' | 'agent'
+
+export type AgentRole = 'planner' | 'builder' | 'reviewer' | 'doc_writer' | 'orchestrator'
+
+export type AgentRuntimeStatus =
+  | 'idle'
+  | 'running'
+  | 'waiting_for_input'
+  | 'auth_required'
+  | 'failed'
+  | 'disabled'
+
+export interface ParticipantProfile {
+  id: ID
+  participantType: ParticipantType
+  displayName: string
+  avatarUrl: string | null
+  color: string
+  agentRole?: AgentRole
+  agentStatus?: AgentRuntimeStatus
+}
+
+export interface AgentProfile {
+  id: ID
+  workspaceId: ID
+  participantId: ID
+  slug: string
+  displayName: string
+  description: string | null
+  role: AgentRole
+  status: AgentRuntimeStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AuthUser {
+  id: ID
+  email: string
+  displayName: string
+  avatarUrl: string | null
+  color: string
+}
+

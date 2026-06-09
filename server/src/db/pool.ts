@@ -2,6 +2,7 @@ import { Pool, type PoolConfig } from 'pg'
 import { readConfig } from '../config.js'
 
 let sharedPool: Pool | null = null
+let poolIsExternal = false
 
 /**
  * Build a node-postgres Pool for the given connection string.
@@ -31,13 +32,20 @@ export function getPool(): Pool {
   return sharedPool
 }
 
-/** Override the process-wide pool. Used by tests against an embedded Postgres. */
-export function setPool(pool: Pool): void {
+/**
+ * Override the process-wide pool. Used by tests against an embedded Postgres.
+ * An externally owned pool is not ended by closePool — its owner handles teardown.
+ */
+export function setPool(pool: Pool, options: { external?: boolean } = {}): void {
   sharedPool = pool
+  poolIsExternal = options.external ?? true
 }
 
 export async function closePool(): Promise<void> {
   if (!sharedPool) return
+  // An externally owned pool (test harness) keeps its reference so other
+  // consumers in the same process keep working; its owner ends it.
+  if (poolIsExternal) return
   const pool = sharedPool
   sharedPool = null
   await pool.end()

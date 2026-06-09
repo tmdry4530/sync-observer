@@ -21,6 +21,11 @@ where p.user_id = m.user_id
 alter table messages
   alter column author_type set not null;
 
+-- user_id is now legacy/deprecated: agent-authored messages have no app_user,
+-- so authorship is carried by author_participant_id + author_type instead.
+alter table messages
+  alter column user_id drop not null;
+
 create index messages_author_participant_id_idx
   on messages(author_participant_id);
 

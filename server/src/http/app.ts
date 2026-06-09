@@ -2,40 +2,36 @@ import { createServer, type IncomingMessage, type Server as HttpServer, type Ser
 import type { AddressInfo } from 'node:net'
 import { isOriginAllowed, readConfig, type ServerConfig } from '../config.js'
 import { createRealtimeAuthorizer, type RealtimeAuthorizer } from '../auth/realtimeAuth.js'
-import { getAccessToken } from '../auth/realtimeAuth.js'
 import { createMessagePersistenceAdapter, type MessagePersistenceAdapter } from '../persistence/messagePersistence.js'
-import {
-  createWorkspaceDeleter,
-  WorkspaceDeleteError,
-  type WorkspaceDeleter
-} from '../persistence/workspaceDeleter.js'
-import {
-  createWorkspaceCreator,
-  WorkspaceCreateError,
-  type WorkspaceCreator
-} from '../persistence/workspaceCreator.js'
-import {
-  createWorkspaceJoiner,
-  WorkspaceJoinError,
-  type WorkspaceJoiner
-} from '../persistence/workspaceJoiner.js'
 import { setupYWebsocketServer, type RealtimeServerHandle } from '../realtime/setupYWebsocket.js'
 import { createLogger, type Logger } from '../utils/logger.js'
+import { closePool } from '../db/pool.js'
+import { Router } from './router.js'
+import { createRequestContext, type RequestContext } from './context.js'
+import { json, sendResponse, type HttpResponse } from './response.js'
+import { isHttpError } from './errors.js'
+import { registerHealthRoutes } from './routes/healthRoutes.js'
+import { registerAuthRoutes } from './routes/authRoutes.js'
+import { registerWorkspaceRoutes } from './routes/workspaceRoutes.js'
 
 export interface SyncSpaceServerOptions {
   config?: ServerConfig
   logger?: Logger
   messagePersistence?: MessagePersistenceAdapter
-  workspaceJoiner?: WorkspaceJoiner
-  workspaceCreator?: WorkspaceCreator
-  workspaceDeleter?: WorkspaceDeleter
   authorizer?: RealtimeAuthorizer
+  /** Extra raw handlers tried before the REST router (used to mount the A2A surface). */
+  rawHandlers?: RawHttpHandler[]
+  queueStats?: () => { queuedJobs: number; runningJobs: number } | null
 }
+
+/** A raw handler returns a response when it claims the request, or null to pass through. */
+export type RawHttpHandler = (ctx: RequestContext) => Promise<HttpResponse | null> | HttpResponse | null
 
 export interface SyncSpaceServerHandle {
   server: HttpServer
   realtime: RealtimeServerHandle
   config: ServerConfig
+  router: Router
   start(): Promise<AddressInfo>
   stop(): Promise<void>
 }
@@ -44,28 +40,30 @@ export function createSyncSpaceServer(options: SyncSpaceServerOptions = {}): Syn
   const config = options.config ?? readConfig()
   const logger = options.logger ?? createLogger(config.logLevel)
   const messagePersistence = options.messagePersistence ?? createMessagePersistenceAdapter(config, logger)
-  const workspaceJoiner = options.workspaceJoiner ?? createWorkspaceJoiner(config, logger)
-  const workspaceCreator = options.workspaceCreator ?? createWorkspaceCreator(config, logger)
-  const workspaceDeleter = options.workspaceDeleter ?? createWorkspaceDeleter(config, logger)
   const authorizer = options.authorizer ?? createRealtimeAuthorizer(config, logger)
+  const rawHandlers = options.rawHandlers ?? []
 
   let realtime: RealtimeServerHandle
+  const router = new Router()
+  registerHealthRoutes(router, {
+    config,
+    realtimeStats: () => realtime.stats(),
+    ...(options.queueStats ? { queueStats: options.queueStats } : {})
+  })
+  registerAuthRoutes(router, config)
+  registerWorkspaceRoutes(router, config)
+
   const server = createServer((request, response) => {
-    void handleHttpRequest(request, response, () => realtime.stats(), config, workspaceJoiner, workspaceCreator, workspaceDeleter)
+    void dispatch(request, response, router, config, logger, rawHandlers)
   })
 
-  realtime = setupYWebsocketServer({
-    server,
-    config,
-    logger,
-    messagePersistence,
-    authorizer
-  })
+  realtime = setupYWebsocketServer({ server, config, logger, messagePersistence, authorizer })
 
   return {
     server,
     realtime,
     config,
+    router,
     start: () =>
       new Promise<AddressInfo>((resolve, reject) => {
         server.once('error', reject)
@@ -87,228 +85,71 @@ export function createSyncSpaceServer(options: SyncSpaceServerOptions = {}): Syn
           resolve()
           return
         }
-        server.close((error) => {
-          if (error) reject(error)
-          else resolve()
-        })
+        server.close((error) => (error ? reject(error) : resolve()))
       })
+      await closePool().catch(() => undefined)
     }
   }
 }
 
-type StatsProvider = () => unknown
-
-async function handleHttpRequest(
+async function dispatch(
   request: IncomingMessage,
   response: ServerResponse,
-  stats: StatsProvider,
+  router: Router,
   config: ServerConfig,
-  workspaceJoiner: WorkspaceJoiner,
-  workspaceCreator: WorkspaceCreator,
-  workspaceDeleter: WorkspaceDeleter
+  logger: Logger,
+  rawHandlers: RawHttpHandler[]
 ): Promise<void> {
-  const pathname = getPathname(request.url)
-  const headers = corsHeaders(request)
+  const ctx = createRequestContext(request, response)
+  const cors = corsHeaders(request)
 
-  if (request.headers.origin && !isOriginAllowed(request.headers.origin, config.allowedOrigins)) {
-    writeJson(response, 403, { code: 'forbidden_origin', message: 'Origin is not allowed' }, headers)
-    return
-  }
-
-  if (request.method === 'OPTIONS') {
-    response.writeHead(204, headers)
-    response.end()
-    return
-  }
-
-  if (request.method === 'GET' && pathname === '/health') {
-    writeJson(response, 200, {
-      ok: true,
-      service: 'syncspace-backend',
-      realtime: stats()
-    }, headers)
-    return
-  }
-
-  if (request.method === 'GET' && pathname === '/ready') {
-    writeJson(response, 200, { ok: true }, headers)
-    return
-  }
-
-  if (request.method === 'POST' && pathname === '/api/workspaces') {
-    await handleCreateWorkspaceRequest(request, response, headers, workspaceCreator)
-    return
-  }
-
-  const workspaceDeleteMatch = matchWorkspaceDeletePath(pathname)
-  if (request.method === 'DELETE' && workspaceDeleteMatch) {
-    await handleDeleteWorkspaceRequest(request, response, headers, workspaceDeleter, workspaceDeleteMatch.workspaceId)
-    return
-  }
-
-  if (request.method === 'POST' && pathname === '/api/workspaces/join') {
-    await handleJoinWorkspaceRequest(request, response, headers, workspaceJoiner)
-    return
-  }
-
-  writeJson(response, 404, {
-    code: 'not_found',
-    message: 'Route not found'
-  }, headers)
-}
-
-function getPathname(rawUrl: string | undefined): string {
   try {
-    return new URL(rawUrl ?? '/', 'http://syncspace.local').pathname
-  } catch {
-    return '/'
-  }
-}
-
-function matchWorkspaceDeletePath(pathname: string): { workspaceId: string } | null {
-  const match = /^\/api\/workspaces\/([^/]+)$/.exec(pathname)
-  return match?.[1] ? { workspaceId: decodePathSegment(match[1]) } : null
-}
-
-function decodePathSegment(value: string): string {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
-class HttpRequestError extends Error {
-  constructor(
-    readonly statusCode: number,
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'HttpRequestError'
-  }
-}
-
-function writeKnownError(response: ServerResponse, headers: Record<string, string>, error: unknown): boolean {
-  if (error instanceof HttpRequestError) {
-    writeJson(response, error.statusCode, { code: error.code, message: error.message }, headers)
-    return true
-  }
-  if (error instanceof WorkspaceCreateError || error instanceof WorkspaceJoinError || error instanceof WorkspaceDeleteError) {
-    writeJson(response, error.statusCode, { code: error.code, message: error.message }, headers)
-    return true
-  }
-  return false
-}
-
-async function handleCreateWorkspaceRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-  headers: Record<string, string>,
-  workspaceCreator: WorkspaceCreator
-): Promise<void> {
-  try {
-    const token = getAccessToken(request)
-    if (!token) {
-      writeJson(response, 401, { code: 'missing_access_token', message: '로그인이 필요합니다.' }, headers)
+    if (request.headers.origin && !isOriginAllowed(request.headers.origin, config.allowedOrigins)) {
+      sendResponse(response, json({ code: 'forbidden_origin', message: 'Origin is not allowed' }, 403), cors)
       return
     }
 
-    const body = await readJsonBody(request)
-    const name = typeof body.name === 'string' ? body.name : ''
-    const workspace = await workspaceCreator.createWorkspace({ name, accessToken: token })
-    writeJson(response, 200, { workspace }, headers)
-  } catch (error) {
-    if (writeKnownError(response, headers, error)) return
-    writeJson(response, 500, { code: 'internal_error', message: '서버 요청 처리 중 문제가 발생했습니다.' }, headers)
-  }
-}
-
-async function handleDeleteWorkspaceRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-  headers: Record<string, string>,
-  workspaceDeleter: WorkspaceDeleter,
-  workspaceId: string
-): Promise<void> {
-  try {
-    const token = getAccessToken(request)
-    if (!token) {
-      writeJson(response, 401, { code: 'missing_access_token', message: '로그인이 필요합니다.' }, headers)
+    if (ctx.method === 'OPTIONS') {
+      response.writeHead(204, cors)
+      response.end()
       return
     }
 
-    const deletedWorkspaceId = await workspaceDeleter.deleteWorkspace({ workspaceId, accessToken: token })
-    writeJson(response, 200, { workspaceId: deletedWorkspaceId }, headers)
-  } catch (error) {
-    if (writeKnownError(response, headers, error)) return
-    writeJson(response, 500, { code: 'internal_error', message: '서버 요청 처리 중 문제가 발생했습니다.' }, headers)
-  }
-}
-
-async function handleJoinWorkspaceRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-  headers: Record<string, string>,
-  workspaceJoiner: WorkspaceJoiner
-): Promise<void> {
-  try {
-    const token = getAccessToken(request)
-    if (!token) {
-      writeJson(response, 401, { code: 'missing_access_token', message: '로그인이 필요합니다.' }, headers)
-      return
-    }
-
-    const body = await readJsonBody(request)
-    const inviteCode = typeof body.inviteCode === 'string' ? body.inviteCode : ''
-    const workspace = await workspaceJoiner.joinByInviteCode({ inviteCode, accessToken: token })
-    writeJson(response, 200, { workspace }, headers)
-  } catch (error) {
-    if (writeKnownError(response, headers, error)) return
-    writeJson(response, 500, { code: 'internal_error', message: '서버 요청 처리 중 문제가 발생했습니다.' }, headers)
-  }
-}
-
-function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    let body = ''
-    request.setEncoding('utf8')
-    request.on('data', (chunk: string) => {
-      body += chunk
-      if (body.length > 64 * 1024) {
-        reject(new HttpRequestError(413, 'payload_too_large', '요청 본문이 너무 큽니다.'))
-        request.destroy()
-      }
-    })
-    request.on('end', () => {
-      if (!body.trim()) {
-        resolve({})
+    for (const handler of rawHandlers) {
+      const result = await handler(ctx)
+      if (result) {
+        sendResponse(response, result, cors)
         return
       }
-      try {
-        const parsed = JSON.parse(body)
-        resolve(typeof parsed === 'object' && parsed !== null ? parsed : {})
-      } catch {
-        reject(new HttpRequestError(400, 'invalid_json', 'JSON 요청 본문이 올바르지 않습니다.'))
-      }
-    })
-    request.on('error', reject)
-  })
-}
+      if (response.headersSent) return
+    }
 
-function writeJson(response: ServerResponse, statusCode: number, body: unknown, headers: Record<string, string> = {}): void {
-  response.writeHead(statusCode, {
-    ...headers,
-    'content-type': 'application/json; charset=utf-8'
-  })
-  response.end(JSON.stringify(body))
+    const match = router.match(ctx.method, ctx.pathname)
+    if (!match) {
+      sendResponse(response, json({ code: 'not_found', message: 'Route not found' }, 404), cors)
+      return
+    }
+
+    ctx.params = match.params
+    const result = await match.handler(ctx)
+    if (result) sendResponse(response, result, cors)
+  } catch (error) {
+    if (response.headersSent) return
+    if (isHttpError(error)) {
+      sendResponse(response, json({ code: error.code, message: error.message }, error.status), cors)
+      return
+    }
+    logger.error('Unhandled HTTP error', { error: error instanceof Error ? error.message : String(error) })
+    sendResponse(response, json({ code: 'internal_error', message: '서버 요청 처리 중 문제가 발생했습니다.' }, 500), cors)
+  }
 }
 
 function corsHeaders(request: IncomingMessage): Record<string, string> {
   const origin = request.headers.origin
   return {
     ...(origin ? { 'access-control-allow-origin': origin } : {}),
-    'access-control-allow-methods': 'GET,POST,DELETE,OPTIONS',
-    'access-control-allow-headers': 'content-type,authorization'
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    'access-control-allow-headers': 'content-type,authorization,a2a-version,a2a-extensions'
   }
 }
