@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { LogLevel } from './utils/logger.js'
 
-export type RealtimeAuthMode = 'off' | 'supabase'
+export type RealtimeAuthMode = 'off' | 'supabase' | 'session'
+export type DocPersistenceMode = 'file' | 'postgres'
 
 export interface ServerConfig {
   nodeEnv: string
@@ -13,6 +14,16 @@ export interface ServerConfig {
   supabaseUrl: string | null
   supabaseServiceRoleKey: string | null
   logLevel: LogLevel
+  databaseUrl: string | null
+  authSecret: string | null
+  sessionCookieName: string
+  sessionCookieDomain: string | null
+  agentTokenPepper: string | null
+  publicAppUrl: string | null
+  a2aVersion: string
+  a2aInterfaceUrl: string
+  a2aAgentCardUrl: string | null
+  docPersistenceMode: DocPersistenceMode
 }
 
 const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://127.0.0.1:3000']
@@ -28,8 +39,19 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const supabaseServiceRoleKey = readFirstEnv(env, ['SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_KEY', 'SERVICE_ROLE_KEY'])
   const wsAuthMode = parseAuthMode(env.WS_AUTH_MODE, nodeEnv)
   const logLevel = parseLogLevel(env.LOG_LEVEL)
+  const databaseUrl = readFirstEnv(env, ['DATABASE_URL', 'POSTGRES_URL'])
+  const authSecret = readFirstEnv(env, ['AUTH_SECRET'])
+  const sessionCookieName = nonEmpty(env.SESSION_COOKIE_NAME) ?? 'syncspace_session'
+  const sessionCookieDomain = readFirstEnv(env, ['SESSION_COOKIE_DOMAIN'])
+  const agentTokenPepper = readFirstEnv(env, ['AGENT_TOKEN_PEPPER'])
+  const publicAppUrl = readFirstEnv(env, ['PUBLIC_APP_URL'])
+  const a2aVersion = nonEmpty(env.A2A_VERSION) ?? '1.0'
+  const a2aInterfaceUrl = (nonEmpty(env.A2A_INTERFACE_URL) ?? `${publicAppUrl ?? 'http://localhost:1234'}/a2a`).replace(/\/$/, '')
+  const a2aAgentCardUrl = readFirstEnv(env, ['A2A_AGENT_CARD_URL'])
+  const docPersistenceMode = parseDocPersistenceMode(env.SYNCSPACE_DOC_PERSISTENCE_MODE, databaseUrl)
 
   assertSupabaseAuthConfig(wsAuthMode, { supabaseUrl, supabaseServiceRoleKey })
+  assertSessionAuthConfig(wsAuthMode, nodeEnv, { databaseUrl, authSecret })
 
   return {
     nodeEnv,
@@ -39,7 +61,41 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     wsAuthMode,
     supabaseUrl,
     supabaseServiceRoleKey,
-    logLevel
+    logLevel,
+    databaseUrl,
+    authSecret,
+    sessionCookieName,
+    sessionCookieDomain,
+    agentTokenPepper,
+    publicAppUrl,
+    a2aVersion,
+    a2aInterfaceUrl,
+    a2aAgentCardUrl,
+    docPersistenceMode
+  }
+}
+
+function parseDocPersistenceMode(value: string | undefined, databaseUrl: string | null): DocPersistenceMode {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === 'file' || normalized === 'postgres') return normalized
+  // Default to postgres when a database is configured, otherwise fall back to file storage.
+  return databaseUrl ? 'postgres' : 'file'
+}
+
+function assertSessionAuthConfig(
+  wsAuthMode: RealtimeAuthMode,
+  nodeEnv: string,
+  config: { databaseUrl: string | null; authSecret: string | null }
+): void {
+  if (wsAuthMode !== 'session') return
+  const missing = [
+    config.databaseUrl ? null : 'DATABASE_URL',
+    config.authSecret ? null : 'AUTH_SECRET'
+  ].filter(Boolean)
+  if (missing.length > 0) {
+    throw new Error(
+      `WS_AUTH_MODE=session is enabled, but the backend process is missing: ${missing.join(', ')}.`
+    )
   }
 }
 
@@ -117,6 +173,10 @@ export function isOriginAllowed(origin: string | undefined, allowedOrigins: stri
 
 export function hasSupabaseAdminConfig(config: ServerConfig): boolean {
   return Boolean(config.supabaseUrl && config.supabaseServiceRoleKey)
+}
+
+export function hasDatabaseConfig(config: ServerConfig): boolean {
+  return Boolean(config.databaseUrl)
 }
 
 

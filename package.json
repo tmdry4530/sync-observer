@@ -12,7 +12,17 @@
     "verify:backend": "pnpm --filter server lint && pnpm --filter server typecheck && pnpm --filter server build",
     "dev:frontend": "vite --host 127.0.0.1 --port 5173",
     "dev:backend": "pnpm --filter server dev",
-    "verify:all": "pnpm typecheck && pnpm verify:frontend && pnpm verify:backend"
+    "verify:all": "pnpm typecheck && pnpm verify:frontend && pnpm verify:backend",
+    "db:migrate": "pnpm --filter server db:migrate",
+    "db:rollback": "pnpm --filter server db:rollback",
+    "db:verify": "pnpm --filter server db:verify",
+    "db:seed": "pnpm --filter server db:seed",
+    "db:seed:agents": "pnpm --filter server db:seed",
+    "test": "pnpm --filter server test",
+    "test:server": "pnpm --filter server test",
+    "test:a2a": "pnpm --filter server exec vitest run a2a",
+    "test:auth": "pnpm --filter server exec vitest run auth",
+    "test:realtime": "pnpm --filter server exec vitest run realtime"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",

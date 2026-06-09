@@ -41,6 +41,7 @@ junit*.xml
 
 # Local agent, AI, and QA artifacts
 .omx/
+.omc/
 .gstack/
 .codex/
 .claude/
