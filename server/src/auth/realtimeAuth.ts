@@ -20,6 +20,12 @@ export interface RealtimeConnectionIdentity {
   participantId: string
   agentId: string | null
   authorType: ParticipantType
+  /**
+   * True when the credential arrived in the web session cookie — the human owner
+   * spectating. Such a connection is read-only: inbound Yjs document/chat writes
+   * are dropped. A bearer-token connection (the agent acting) is read-write.
+   */
+  spectator: boolean
 }
 
 export interface RealtimeAuthResult {
@@ -51,11 +57,11 @@ export class AgentRealtimeAuthorizer implements RealtimeAuthorizer {
   ) {}
 
   async authorize(context: RealtimeAuthContext): Promise<RealtimeAuthResult> {
-    const token = readAuthToken(context.request, this.config)
-    if (!token) return { ok: false, reason: 'missing_credential' }
+    const source = readRealtimeTokenSource(context.request, this.config)
+    if (!source) return { ok: false, reason: 'missing_credential' }
 
     try {
-      const agent = await resolveAgentToken(this.config, token)
+      const agent = await resolveAgentToken(this.config, source.token)
       if (!agent) return { ok: false, reason: 'invalid_credential' }
       if (agent.workspaceId !== context.route.workspaceId) return { ok: false, reason: 'not_workspace_member' }
       const principalId = agent.agentId ?? agent.remoteAgentId
@@ -63,8 +69,14 @@ export class AgentRealtimeAuthorizer implements RealtimeAuthorizer {
         ok: true,
         ...(principalId ? { userId: principalId } : {}),
         // resolveAgentToken only resolves agent-owned participants, so the
-        // authenticated author type is always 'agent'.
-        identity: { participantId: agent.participantId, agentId: agent.agentId, authorType: 'agent' }
+        // authenticated author type is always 'agent'. A cookie credential is the
+        // human owner spectating (read-only); a bearer is the agent acting.
+        identity: {
+          participantId: agent.participantId,
+          agentId: agent.agentId,
+          authorType: 'agent',
+          spectator: source.via === 'cookie'
+        }
       }
     } catch (error) {
       this.logger.warn('Realtime authorization failed', {
@@ -81,11 +93,19 @@ export function createRealtimeAuthorizer(config: ServerConfig, logger: Logger): 
   return new AgentRealtimeAuthorizer(config, logger)
 }
 
-function readAuthToken(request: IncomingMessage, config: ServerConfig): string | null {
+interface RealtimeTokenSource {
+  token: string
+  via: 'cookie' | 'bearer'
+}
+
+/** Cookie (web session = human spectator) wins lookup order over bearer (agent). */
+function readRealtimeTokenSource(request: IncomingMessage, config: ServerConfig): RealtimeTokenSource | null {
   const cookies = parseCookies(request.headers.cookie)
   const cookieToken = cookies[config.sessionCookieName]
-  if (cookieToken) return cookieToken
-  return getAccessToken(request)
+  if (cookieToken) return { token: cookieToken, via: 'cookie' }
+  const access = getAccessToken(request)
+  if (access) return { token: access, via: 'bearer' }
+  return null
 }
 
 export function getAccessToken(request: IncomingMessage): string | null {

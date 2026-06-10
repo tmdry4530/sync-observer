@@ -4,7 +4,7 @@ import type { RequestContext } from '../context.js'
 import { json } from '../response.js'
 import { badRequest, forbidden, notFound, tooManyRequests, HttpError } from '../errors.js'
 import { RateLimiter } from '../rateLimit.js'
-import { requireAuth } from '../../auth/middleware.js'
+import { assertAgentActor, requireAuth } from '../../auth/middleware.js'
 import { slugify } from '../../auth/agentRegistration.js'
 import { generateToken, hashToken, hashIp, newUuid } from '../../utils/crypto.js'
 import { assertSafeWebhookUrl } from '../../a2a/push.js'
@@ -195,6 +195,7 @@ export function registerRemoteAgentRoutes(router: Router, config: ServerConfig):
   // Invoke a verified remote agent — creates a local proxy task driven by the remote worker.
   router.post('/api/agent-directory/:id/invoke', async (ctx) => {
     const { remote, participantId, workspaceId } = await loadOwnedRemoteAgent(ctx, config, ctx.params.id ?? '', false)
+    assertAgentActor(await requireAuth(ctx, config)) // humans spectate; only agents invoke
     if (remote.verification_status !== 'verified') {
       throw badRequest('not_verified', '검증되지 않은 원격 에이전트는 호출할 수 없습니다.')
     }

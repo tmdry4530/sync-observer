@@ -3,7 +3,7 @@ import type { Router } from '../router.js'
 import { json } from '../response.js'
 import { badRequest, notFound } from '../errors.js'
 import { newUuid } from '../../utils/crypto.js'
-import { requireWorkspaceMember } from '../../auth/middleware.js'
+import { requireAgentActor, requireWorkspaceMember } from '../../auth/middleware.js'
 import {
   ensureDefaultAgents,
   getAgentById,
@@ -47,7 +47,7 @@ export function registerAgentRoutes(router: Router, config: ServerConfig): void 
     const agentId = ctx.params.agentId ?? ''
     const agent = await getAgentById(agentId)
     if (!agent) throw notFound('에이전트를 찾을 수 없습니다.')
-    const { auth } = await requireWorkspaceMember(ctx, config, agent.workspace_id)
+    const { auth } = await requireAgentActor(ctx, config, agent.workspace_id)
 
     const body = await ctx.json<{ content?: string; channelId?: string; documentId?: string; contextId?: string }>()
     const content = typeof body.content === 'string' ? body.content.trim() : ''
@@ -69,7 +69,7 @@ export function registerAgentRoutes(router: Router, config: ServerConfig): void 
   // enforces remote gating (verified + healthy), and routes to the right task pipeline.
   router.post('/api/workspaces/:workspaceId/invoke', async (ctx) => {
     const workspaceId = ctx.params.workspaceId ?? ''
-    const { auth } = await requireWorkspaceMember(ctx, config, workspaceId)
+    const { auth } = await requireAgentActor(ctx, config, workspaceId)
     const body = await ctx.json<{ slug?: string; content?: string; channelId?: string; documentId?: string }>()
     const slug = typeof body.slug === 'string' ? body.slug.trim().toLowerCase() : ''
     const content = typeof body.content === 'string' ? body.content.trim() : ''
@@ -120,7 +120,7 @@ export function registerAgentRoutes(router: Router, config: ServerConfig): void 
     const taskId = ctx.params.taskId ?? ''
     const taskRow = await getTask(taskId)
     if (!taskRow) throw notFound('태스크를 찾을 수 없습니다.')
-    await requireWorkspaceMember(ctx, config, taskRow.workspace_id)
+    await requireAgentActor(ctx, config, taskRow.workspace_id)
     const task = await cancelTask(taskId)
     return json({ task })
   })

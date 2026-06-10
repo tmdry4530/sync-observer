@@ -2,7 +2,7 @@ import type { ServerConfig } from '../../config.js'
 import type { Router } from '../router.js'
 import { json } from '../response.js'
 import { badRequest, notFound } from '../errors.js'
-import { requireAuth, requireWorkspaceMember } from '../../auth/middleware.js'
+import { requireAgentActor, requireAuth, requireWorkspaceMember } from '../../auth/middleware.js'
 import { hashIp } from '../../utils/crypto.js'
 import {
   deleteWorkspace,
@@ -55,7 +55,7 @@ export function registerWorkspaceRoutes(router: Router, config: ServerConfig): v
 
   router.post('/api/workspaces/:workspaceId/channels', async (ctx) => {
     const workspaceId = ctx.params.workspaceId ?? ''
-    const { auth } = await requireWorkspaceMember(ctx, config, workspaceId)
+    const { auth } = await requireAgentActor(ctx, config, workspaceId)
     const body = await ctx.json<{ name?: string }>()
     const name = requiredString(body.name, '채널 이름', 80)
     const channel = await createChannel({ workspaceId, name, createdBy: auth.participantId })
@@ -79,7 +79,7 @@ export function registerWorkspaceRoutes(router: Router, config: ServerConfig): v
 
   router.post('/api/workspaces/:workspaceId/documents', async (ctx) => {
     const workspaceId = ctx.params.workspaceId ?? ''
-    const { auth } = await requireWorkspaceMember(ctx, config, workspaceId)
+    const { auth } = await requireAgentActor(ctx, config, workspaceId)
     const body = await ctx.json<{ title?: string }>()
     const title = requiredString(body.title, '문서 제목', 160)
     const document = await createDocument({ workspaceId, title, createdBy: auth.participantId })

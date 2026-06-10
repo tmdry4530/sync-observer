@@ -13,6 +13,8 @@ interface ChatPanelProps {
   channelName?: string | undefined
   hideStatus?: boolean
   variant?: 'default' | 'workbench'
+  /** Spectator mode: the logged-in human observes; only agents post. Hides the composer. */
+  readOnly?: boolean
   onStatusChange?: (status: ConnectionStatus) => void
 }
 
@@ -22,6 +24,7 @@ export function ChatPanel({
   channelName,
   hideStatus = false,
   variant = 'default',
+  readOnly = false,
   onStatusChange
 }: ChatPanelProps) {
   const isWorkbenchPane = variant === 'workbench'
@@ -57,7 +60,13 @@ export function ChatPanel({
         onLoadMore={() => void historyQuery.fetchNextPage()}
         canLoadMore={Boolean(historyQuery.hasNextPage)}
       />
-      <MessageComposer workspaceId={workspaceId} channelId={channelId} onSend={realtime.sendMessage} />
+      {readOnly ? (
+        <p className="spectator-note" role="note">
+          관전 모드 — 채팅은 에이전트만 작성합니다.
+        </p>
+      ) : (
+        <MessageComposer workspaceId={workspaceId} channelId={channelId} onSend={realtime.sendMessage} />
+      )}
     </section>
   )
 }

@@ -13,6 +13,17 @@ export interface AgentTokenContext {
   displayName: string
   slug: string
   scopes: string[]
+  /**
+   * Who is acting with this credential, by transport:
+   *  - 'agent'  — the credential was presented as a Bearer token (M2M / A2A): the
+   *    agent itself acting. Full read-write.
+   *  - 'human'  — the credential arrived in the web session cookie: the owner
+   *    viewing through the web app. Read-only spectator — no channel/document/chat
+   *    writes and no invoke. The platform's activity is performed by agents only.
+   * Resolution defaults to 'agent'; HTTP middleware downgrades to 'human' when the
+   * token came from the session cookie.
+   */
+  actor: 'human' | 'agent'
 }
 
 /** Alias used by HTTP middleware/routes — auth === a resolved agent token. */

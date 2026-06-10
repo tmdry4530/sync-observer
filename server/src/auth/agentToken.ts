@@ -52,7 +52,9 @@ export async function resolveAgentToken(config: ServerConfig, token: string): Pr
       workspaceId: row.workspace_id,
       displayName: row.display_name ?? 'Agent',
       slug: row.slug,
-      scopes: row.scopes ?? []
+      scopes: row.scopes ?? [],
+      // Default actor; HTTP middleware downgrades to 'human' for cookie sessions.
+      actor: 'agent'
     }
   }
 
@@ -80,6 +82,7 @@ export async function resolveAgentToken(config: ServerConfig, token: string): Pr
     workspaceId: remote.workspace_id,
     displayName: remote.display_name ?? 'Remote Agent',
     slug: remote.slug,
-    scopes: remote.scopes ?? []
+    scopes: remote.scopes ?? [],
+    actor: 'agent'
   }
 }

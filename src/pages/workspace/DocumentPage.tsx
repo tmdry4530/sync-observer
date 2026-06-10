@@ -8,5 +8,5 @@ export function DocumentPage() {
   const documentTitle = documents.find((document) => document.id === documentId)?.title
 
   if (!workspaceId || !documentId) return <div className="page-state">문서 경로가 올바르지 않습니다.</div>
-  return <EditorPanel workspaceId={workspaceId} documentId={documentId} documentTitle={documentTitle} documents={documents} />
+  return <EditorPanel workspaceId={workspaceId} documentId={documentId} documentTitle={documentTitle} documents={documents} readOnly />
 }

@@ -39,6 +39,9 @@ describe('end-to-end smoke (registered agent)', () => {
     expect(registered.status).toBe(200)
     const { agentId, secret } = registered.body.credential
     const workspaceId = registered.body.identity.workspaceId
+    // The AGENT acts via its Bearer credential; activity (create/invoke) is
+    // agent-only. The owner's web cookie is a read-only spectator (asserted below).
+    const asAgent = { authorization: `Bearer ${secret}` }
 
     // 2. Owner-login with the agent credential sets the session cookie.
     const login = await apiRequest<{ identity: { agentId: string } }>(server, 'POST', '/api/auth/agent-login', {
@@ -47,22 +50,31 @@ describe('end-to-end smoke (registered agent)', () => {
     expect(login.status).toBe(200)
     expect(login.body.identity.agentId).toBe(agentId)
 
-    // 3. The workspace list shows the agent's own workspace.
+    // 3. The workspace list shows the agent's own workspace (read works for the cookie session too).
     const workspaces = await apiRequest<{ workspaces: { id: string }[] }>(server, 'GET', '/api/workspaces')
     expect(workspaces.body.workspaces.some((ws) => ws.id === workspaceId)).toBe(true)
 
-    // 4. Channels + documents can be created and listed.
+    // 3b. The human (cookie) is a spectator: a write is rejected.
+    const humanWrite = await apiRequest<{ code?: string }>(server, 'POST', `/api/workspaces/${workspaceId}/channels`, {
+      body: { name: 'human-attempt' }
+    })
+    expect(humanWrite.status).toBe(403)
+    expect(humanWrite.body.code).toBe('spectator_read_only')
+
+    // 4. The agent (bearer) creates channels + documents.
     const channel = await apiRequest<{ channel: { id: string; name: string } }>(
       server,
       'POST',
       `/api/workspaces/${workspaceId}/channels`,
-      { body: { name: 'general' } }
+      { body: { name: 'general' }, useCookies: false, headers: asAgent }
     )
     expect(channel.status).toBe(200)
     const channelId = channel.body.channel.id
 
     const doc = await apiRequest<{ document: { id: string } }>(server, 'POST', `/api/workspaces/${workspaceId}/documents`, {
-      body: { title: 'Welcome' }
+      body: { title: 'Welcome' },
+      useCookies: false,
+      headers: asAgent
     })
     expect(doc.status).toBe(200)
     const documents = await apiRequest<{ documents: { title: string }[] }>(server, 'GET', `/api/workspaces/${workspaceId}/documents`)
@@ -74,9 +86,11 @@ describe('end-to-end smoke (registered agent)', () => {
     const planner = agentsRes.body.agents.find((a) => a.slug === 'planner')!
     expect(planner).toBeTruthy()
 
-    // 6. Invoke @planner -> task created.
+    // 6. The agent (bearer) invokes @planner -> task created.
     const invoke = await apiRequest<{ task: { id: string } }>(server, 'POST', `/api/agents/${planner.id}/invoke`, {
-      body: { content: '@planner SyncSpace에 A2A 협업 구조를 설계해줘', channelId }
+      body: { content: '@planner SyncSpace에 A2A 협업 구조를 설계해줘', channelId },
+      useCookies: false,
+      headers: asAgent
     })
     expect(invoke.status).toBe(200)
 

@@ -9,6 +9,7 @@ import type { MessagePersistenceAdapter } from '../persistence/messagePersistenc
 import type { Logger } from '../utils/logger.js'
 import { createChatRoomPersistenceHooks } from './chatRoom.js'
 import { createDocRoomPersistenceHooks, createDocStorageBackend } from './docPersistence.js'
+import { makeSocketReadOnly } from './readOnly.js'
 import { parseRealtimeRequestUrl, type RealtimeRoute } from './roomNames.js'
 
 export interface RealtimeStats {
@@ -84,6 +85,9 @@ export function setupYWebsocketServer(options: SetupYWebsocketOptions): Realtime
     // origin, which is how persisted chat messages get their authorship.
     const identity = (request as RequestWithRoute).syncSpaceIdentity
     if (identity) chatPersistence.registerConnection(socket, identity)
+    // Human owners (cookie sessions) spectate: drop their inbound document/chat
+    // writes before Yjs applies them. Must wrap the socket BEFORE setupWSConnection.
+    if (identity?.spectator) makeSocketReadOnly(socket)
 
     try {
       setupWSConnection(socket, request, { docName: route.roomName })

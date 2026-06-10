@@ -25,6 +25,8 @@ interface EditorPanelProps {
   documents?: DocumentMeta[]
   hideStatus?: boolean
   variant?: 'default' | 'workbench'
+  /** Spectator mode: render the document read-only (only agents edit). */
+  readOnly?: boolean
   onStatusChange?: (status: ConnectionStatus) => void
 }
 
@@ -35,11 +37,12 @@ export function EditorPanel({
   documents = [],
   hideStatus = false,
   variant = 'default',
+  readOnly = false,
   onStatusChange
 }: EditorPanelProps) {
   const isWorkbenchPane = variant === 'workbench'
   const realtime = useYEditorRoom(workspaceId, documentId)
-  const editor = useCollaborativeEditor(realtime.doc)
+  const editor = useCollaborativeEditor(realtime.doc, { editable: !readOnly })
   const status = realtime.status === 'disconnected' && realtime.presence.length > 0 ? 'connected' : realtime.status
   const [slashState, setSlashState] = useState<SlashCommandState | null>(null)
   const [activeSlashIndex, setActiveSlashIndex] = useState(0)

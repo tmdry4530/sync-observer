@@ -117,7 +117,8 @@ describe('realtime chat authorship enforcement', () => {
     hooks.registerConnection(conn, {
       participantId: attacker.identity.participantId,
       agentId: attacker.identity.agentId,
-      authorType: 'agent'
+      authorType: 'agent',
+      spectator: false
     })
 
     const ydoc = new Y.Doc()
