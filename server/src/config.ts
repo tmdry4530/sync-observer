@@ -195,8 +195,12 @@ function parseAuthMode(value: string | undefined, nodeEnv: string): RealtimeAuth
   // Agent-credential auth is the production default.
   if (!normalized) return nodeEnv === 'production' ? 'agent' : 'off'
   if (normalized === 'off') return 'off'
-  // Accept legacy 'session'/'supabase' values as the agent-credential mode.
-  if (normalized === 'agent' || normalized === 'session' || normalized === 'supabase') return 'agent'
+  // Accept legacy 'session' as the app-owned agent credential mode.
+  if (normalized === 'agent' || normalized === 'session') return 'agent'
+  // Legacy Railway deployments used "supabase" for client-side auth. The
+  // current backend has no Supabase-token verifier, so keep realtime open
+  // instead of treating it as DB-backed agent-token auth at boot.
+  if (normalized === 'supabase') return 'off'
   throw new Error(`Invalid WS_AUTH_MODE value: ${value}`)
 }
 

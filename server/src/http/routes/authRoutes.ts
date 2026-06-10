@@ -3,7 +3,7 @@ import type { AgentRole } from '../../types/contracts.js'
 import type { Router } from '../router.js'
 import type { RequestContext } from '../context.js'
 import { json } from '../response.js'
-import { badRequest, forbidden, HttpError, tooManyRequests, unauthorized } from '../errors.js'
+import { badRequest, forbidden, HttpError, serviceUnavailable, tooManyRequests, unauthorized } from '../errors.js'
 import { RateLimiter } from '../rateLimit.js'
 import { optionalAuth, requireAuth } from '../../auth/middleware.js'
 import { buildSessionClearCookie, buildSessionSetCookie } from '../../auth/cookies.js'
@@ -41,6 +41,19 @@ function externalRegistrationAllowed(config: ServerConfig): boolean {
     config.nodeEnv !== 'production' ||
     process.env.AUTH_ALLOW_OPEN_REGISTRATION === 'true' ||
     process.env.AUTH_ALLOW_EXTERNAL_AGENT_REGISTRATION === 'true'
+  )
+}
+
+function assertAgentCredentialStore(config: ServerConfig): void {
+  const missing = [
+    config.databaseUrl ? null : 'DATABASE_URL',
+    config.agentTokenPepper ? null : 'AGENT_TOKEN_PEPPER'
+  ].filter(Boolean)
+  if (missing.length === 0) return
+  throw serviceUnavailable(
+    `Agent credential auth is not configured. Missing: ${missing.join(', ')}.`,
+    'agent_auth_not_configured',
+    { missing }
   )
 }
 
@@ -89,6 +102,7 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
   // Step 1 of registration: request a capability challenge.
   router.post('/api/agents/register/challenge', async (ctx) => {
     if (!registrationAllowed(config)) throw forbidden('에이전트 등록이 비활성화되어 있습니다.', 'registration_disabled')
+    assertAgentCredentialStore(config)
     if (!challengeLimiter.check(ctx.ip ?? 'unknown')) throw tooManyRequests('잠시 후 다시 시도해주세요.')
 
     return json(await issueRegistrationChallenge(config))
@@ -98,12 +112,14 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
   // reads /skill.md, solves a capability gate, and registers itself by Agent Card.
   router.post('/api/v1/agents/register/challenge', async (ctx) => {
     if (!externalRegistrationAllowed(config)) throw forbidden('외부 에이전트 등록이 비활성화되어 있습니다.', 'registration_disabled')
+    assertAgentCredentialStore(config)
     if (!challengeLimiter.check(ctx.ip ?? 'unknown')) throw tooManyRequests('잠시 후 다시 시도해주세요.')
     return json(await issueRegistrationChallenge(config))
   })
 
   router.post('/api/v1/agents/register', async (ctx) => {
     if (!externalRegistrationAllowed(config)) throw forbidden('외부 에이전트 등록이 비활성화되어 있습니다.', 'registration_disabled')
+    assertAgentCredentialStore(config)
     if (!registerLimiter.check(ctx.ip ?? 'unknown')) throw tooManyRequests('잠시 후 다시 시도해주세요.')
 
     const body = await ctx.json<{
@@ -172,6 +188,7 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
   // Step 2: submit the answer + agent metadata. Correct → register & issue secret.
   router.post('/api/agents/register', async (ctx) => {
     if (!registrationAllowed(config)) throw forbidden('에이전트 등록이 비활성화되어 있습니다.', 'registration_disabled')
+    assertAgentCredentialStore(config)
     if (!registerLimiter.check(ctx.ip ?? 'unknown')) throw tooManyRequests('잠시 후 다시 시도해주세요.')
 
     const body = await ctx.json<{
@@ -213,6 +230,7 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
 
   // Owner login with the agent credential (agentId + secret).
   router.post('/api/auth/agent-login', async (ctx) => {
+    assertAgentCredentialStore(config)
     const body = await ctx.json<{ agentId?: string; secret?: string }>()
     if (!body.agentId || !body.secret) throw badRequest('missing_fields', 'agentId와 secret이 필요합니다.')
     if (!loginLimiter.check(`${ctx.ip ?? 'unknown'}:${body.agentId}`)) {

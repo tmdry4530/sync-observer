@@ -19,6 +19,7 @@ export async function optionalAuth(ctx: RequestContext, config: ServerConfig): P
   if (ctx.auth) return ctx.auth
   const token = readAuthToken(ctx, config)
   if (!token) return null
+  if (!config.databaseUrl || !config.agentTokenPepper) return null
   const auth = await resolveAgentToken(config, token)
   ctx.auth = auth
   return auth

@@ -8,7 +8,7 @@
 # 적용 방법 / how to apply:
 #   Railway > agent-worker service > Settings > Config-as-code path = railway.worker.toml
 #
-# 필요한 env: api 서비스와 동일한 DB/Auth env + WORKER_ID, AGENT_WORKER_ENABLED,
+# 필요한 env: DATABASE_URL, AGENT_TOKEN_PEPPER 등 api 서비스와 동일한 DB/Auth env + WORKER_ID, AGENT_WORKER_ENABLED,
 #   PUSH_WORKER_ENABLED. 자세한 목록은 docs/migration/env_inventory.md 참고.
 
 [build]
@@ -16,7 +16,7 @@ builder = "NIXPACKS"
 buildCommand = "corepack enable && pnpm install --frozen-lockfile && pnpm --filter server build"
 
 [deploy]
-preDeployCommand = "node server/dist/db/migrate.js"
+preDeployCommand = "sh -c 'if [ -n \"${DATABASE_URL}${POSTGRES_URL}\" ]; then node server/dist/db/migrate.js; else echo \"DATABASE_URL not configured; skipping migrations\"; fi'"
 startCommand = "pnpm --filter server worker"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

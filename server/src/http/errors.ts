@@ -57,6 +57,9 @@ export const conflict = (message: string, code = 'conflict'): HttpError =>
 export const tooManyRequests = (message = 'Too many requests', code = 'rate_limited'): HttpError =>
   new HttpError(429, code, message)
 
+export const serviceUnavailable = (message = 'Service unavailable', code = 'service_unavailable', extras?: Record<string, unknown>): HttpError =>
+  new HttpError(503, code, message, extras)
+
 export const internalError = (message = 'Internal server error', code = 'internal_error'): HttpError =>
   new HttpError(500, code, message)
 
