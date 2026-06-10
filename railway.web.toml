@@ -10,15 +10,15 @@
 # 중요 / important:
 #   - API_INTERNAL_URL은 반드시 api 서비스의 private URL을 가리켜야 한다.
 #     예) http://api.railway.internal:8080  (포트는 api 서비스의 PORT와 일치)
-#   - healthcheckPath /health는 Caddy가 api로 프록시하므로, 사실상
-#     web→api 경로 전체(프록시 포함)가 살아 있는지 확인한다.
+#   - healthcheckPath / 는 Caddy 정적 응답만 확인한다. api 서비스의
+#     DB/readiness는 api 서비스 자체 healthcheck에서 따로 확인한다.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.web"
 
 [deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 60
+healthcheckPath = "/"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

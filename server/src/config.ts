@@ -32,6 +32,7 @@ export interface ServerConfig {
   anthropicModel: string
   agentLiveMaxTokens: number
   agentLiveTimeoutMs: number
+  strictReadyChecks: boolean
 }
 
 const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://127.0.0.1:3000']
@@ -65,6 +66,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const anthropicModel = nonEmpty(env.ANTHROPIC_MODEL) ?? 'claude-sonnet-4-6'
   const agentLiveMaxTokens = parsePositiveInt(env.AGENT_LIVE_MAX_TOKENS, 4096)
   const agentLiveTimeoutMs = parsePositiveInt(env.AGENT_LIVE_TIMEOUT_MS, 60_000)
+  const strictReadyChecks = parseBoolean(env.STRICT_READY_CHECKS, false)
 
   assertAgentAuthConfig(wsAuthMode, { databaseUrl, agentTokenPepper })
   assertAgentRuntimeConfig(agentRuntimeMode, modelProvider, anthropicApiKey)
@@ -94,7 +96,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     anthropicApiKey,
     anthropicModel,
     agentLiveMaxTokens,
-    agentLiveTimeoutMs
+    agentLiveTimeoutMs,
+    strictReadyChecks
   }
 }
 
@@ -109,6 +112,14 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback
   const parsed = Number.parseInt(value, 10)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return fallback
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return fallback
 }
 
 /**

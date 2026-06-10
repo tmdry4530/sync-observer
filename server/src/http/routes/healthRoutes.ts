@@ -36,11 +36,15 @@ export function registerHealthRoutes(router: Router, deps: HealthDeps): void {
   })
 
   router.get('/ready', async () => {
-    // Readiness fails when a configured database is unreachable so Railway can
-    // hold traffic until the dependency recovers.
+    // Railway uses this endpoint to decide whether the container itself came up.
+    // Keep DB strictness opt-in so a transient managed-Postgres delay does not
+    // turn a successful deploy into a healthcheck failure.
     if (deps.config.databaseUrl) {
       const dbOk = await databaseHealthy(deps.config)
-      if (!dbOk) return json({ ok: false, database: 'unavailable' }, 503)
+      if (!dbOk && deps.config.strictReadyChecks) {
+        return json({ ok: false, database: 'unavailable' }, 503)
+      }
+      return json({ ok: true, database: dbOk ? 'ok' : 'unavailable' })
     }
     return json({ ok: true })
   })

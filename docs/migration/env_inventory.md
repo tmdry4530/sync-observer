@@ -26,6 +26,7 @@
 | `A2A_INTERFACE_URL` | api, worker | A2A JSON-RPC interface URL | `https://syncspace.app/a2a` | ❌ |
 | `A2A_AGENT_CARD_URL` | api | A2A agent card URL | `https://syncspace.app/.well-known/agent-card.json` | ❌ |
 | `WS_AUTH_MODE` | api | 실시간 인증 모드 `off\|supabase\|session` | `session` | ❌ |
+| `STRICT_READY_CHECKS` | api | `/ready`에서 DB 장애를 503으로 볼지 여부. Railway deploy healthcheck는 기본 `false` 권장 | `false` | ❌ |
 | `SYNCSPACE_DOC_PERSISTENCE_MODE` | api | 문서 영속화 모드 `file\|postgres` | `postgres` | ❌ |
 | `SYNCSPACE_DOC_PERSISTENCE_DIR` | api | `mode=file` 일 때 스냅샷 경로 | `.syncspace-data/ydocs` | ❌ |
 | `ALLOWED_ORIGINS` | api | WS/CORS 허용 origin (쉼표 구분) | `https://syncspace.app` | ❌ |
@@ -33,6 +34,7 @@
 | `NODE_ENV` | api, worker | 런타임 환경 | `production` | ❌ |
 | `HOST` | api | 바인드 호스트 | `0.0.0.0` | ❌ |
 | `PORT` | api, web | listen 포트 (Railway 주입) | `8080` | ❌ |
+| `AUTH_ALLOW_EXTERNAL_AGENT_REGISTRATION` | api | production에서 `/api/v1/agents/register*` public external-agent registration 활성화 | `true` | ❌ |
 
 ## 2. agent-worker 전용 (신규)
 

@@ -16,6 +16,7 @@ builder = "NIXPACKS"
 buildCommand = "corepack enable && pnpm install --frozen-lockfile && pnpm --filter server build"
 
 [deploy]
+preDeployCommand = "node server/dist/db/migrate.js"
 startCommand = "pnpm --filter server worker"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
