@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { WebsocketProvider } from 'y-websocket'
 import type { AwarenessState, PresenceUser } from '../../shared/types/contracts'
-import { usePresenceUiStore } from '../../shared/stores/presenceStore'
+import { dedupePresence, usePresenceUiStore } from '../../shared/stores/presenceStore'
 
 export function useYAwareness(provider: WebsocketProvider | null, user: PresenceUser | null, mode: AwarenessState['mode']) {
   const [states, setStates] = useState<AwarenessState[]>([])
@@ -15,13 +15,14 @@ export function useYAwareness(provider: WebsocketProvider | null, user: Presence
     if (!provider) return
 
     if (localState) provider.awareness.setLocalState(localState)
+    const roomKey = provider.roomname
 
     const collectStates = () => {
-      const next = Array.from(provider.awareness.getStates().values())
-        .filter(isAwarenessState)
-        .sort((a, b) => a.user.displayName.localeCompare(b.user.displayName))
+      // Dedup by identity: one credential's connections (and an agent + its owner's
+      // spectator session) count once. The store unions across rooms and dedups again.
+      const next = dedupePresence(Array.from(provider.awareness.getStates().values()).filter(isAwarenessState))
       setStates(next)
-      usePresenceUiStore.getState().setStates(next)
+      usePresenceUiStore.getState().setRoomStates(roomKey, next)
     }
 
     provider.awareness.on('change', collectStates)
@@ -30,7 +31,7 @@ export function useYAwareness(provider: WebsocketProvider | null, user: Presence
     return () => {
       provider.awareness.off('change', collectStates)
       provider.awareness.setLocalState(null)
-      usePresenceUiStore.getState().clear()
+      usePresenceUiStore.getState().clearRoom(roomKey)
     }
   }, [localState, provider])
 
