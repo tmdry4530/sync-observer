@@ -8,6 +8,6 @@ export const routes = {
   document: (workspaceId = ':workspaceId', documentId = ':documentId') => `/w/${workspaceId}/doc/${documentId}`,
   workbench: (workspaceId = ':workspaceId', channelId = ':channelId', documentId = ':documentId') =>
     `/w/${workspaceId}/ch/${channelId}/doc/${documentId}`,
-  mission: (workspaceId = ':workspaceId', taskId = ':taskId') => `/w/${workspaceId}/mission/${taskId}`,
+  mission: (workspaceId = ':workspaceId', contextId = ':contextId') => `/w/${workspaceId}/mission/${contextId}`,
   missions: (workspaceId = ':workspaceId') => `/w/${workspaceId}/missions`
 } as const

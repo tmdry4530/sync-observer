@@ -9,8 +9,8 @@ import { EventDetail } from './EventDetail'
 import { routes } from '../../../app/router/routes'
 
 export function MissionView() {
-  const { workspaceId, taskId } = useParams<{ workspaceId: string; taskId: string }>()
-  const { missionData, isLoading, error } = useMissionQuery(taskId ?? null)
+  const { workspaceId, contextId } = useParams<{ workspaceId: string; contextId: string }>()
+  const { missionData, isLoading, error } = useMissionQuery(contextId ?? null)
   const [selectedSeq, setSelectedSeq] = useState<number | null>(null)
 
   const selectedEvent =
@@ -32,7 +32,10 @@ export function MissionView() {
     )
   }
 
-  const task = missionData?.detail.task
+  const missionTitle =
+    missionData?.detail.tasks[0]?.title ??
+    (missionData?.detail.mission.contextId.slice(0, 12) ?? contextId)
+
   const backHref = workspaceId ? routes.workspace(workspaceId) : routes.workspaces
 
   return (
@@ -45,7 +48,7 @@ export function MissionView() {
         </Link>
         <div className="mission-topbar-title">
           <p className="eyebrow">Mission View</p>
-          <h1>{task ? (task.metadata?.['title'] as string | undefined) ?? task.id.slice(0, 12) : taskId}</h1>
+          <h1>{missionTitle}</h1>
         </div>
       </header>
 

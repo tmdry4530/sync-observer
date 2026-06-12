@@ -36,7 +36,7 @@ export const router = createBrowserRouter([
         ]
       },
       { path: '/w/:workspaceId/missions', element: lazyPage(<MissionList />) },
-      { path: '/w/:workspaceId/mission/:taskId', element: lazyPage(<MissionView />) }
+      { path: '/w/:workspaceId/mission/:contextId', element: lazyPage(<MissionView />) }
     ]
   },
   { path: '*', element: lazyPage(<NotFoundPage />) }
