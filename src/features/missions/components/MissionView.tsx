@@ -11,7 +11,7 @@ import { routes } from '../../../app/router/routes'
 export function MissionView() {
   const { workspaceId, contextId } = useParams<{ workspaceId: string; contextId: string }>()
   const { missionData, isLoading, error } = useMissionQuery(contextId ?? null)
-  const [selectedSeq, setSelectedSeq] = useState<number | null>(null)
+  const [selectedSeq, setSelectedSeq] = useState<string | null>(null)
 
   const selectedEvent =
     selectedSeq != null
@@ -22,7 +22,9 @@ export function MissionView() {
     return <div className="page-state">미션 데이터를 불러오는 중...</div>
   }
 
-  if (error) {
+  // Only surface the error page when there is nothing to show — a transient
+  // failed background poll must not wipe a populated view.
+  if (error && !missionData) {
     return (
       <div className="page-state">
         <p className="form-error" role="alert">
@@ -57,7 +59,10 @@ export function MissionView() {
         {/* LEFT — pipeline + roster */}
         <aside className="mission-left" aria-label="파이프라인 및 에이전트">
           <PipelineStepper stages={missionData?.pipelineStages ?? new Map()} />
-          <AgentRoster roster={missionData?.agentRoster ?? new Map()} />
+          <AgentRoster
+            roster={missionData?.agentRoster ?? new Map()}
+            agents={missionData?.detail.agents ?? []}
+          />
         </aside>
 
         {/* CENTER — selected event detail (work surface) */}

@@ -1,4 +1,5 @@
 import type { AgentStatusEvent } from '../../../../shared/types/engineeringEvents'
+import { RawInspect } from './RawInspect'
 
 interface Props {
   event: AgentStatusEvent
@@ -33,14 +34,5 @@ export function AgentStatusRenderer({ event }: Props) {
       </div>
       <RawInspect event={event} />
     </div>
-  )
-}
-
-function RawInspect({ event }: { event: AgentStatusEvent }) {
-  return (
-    <details className="raw-inspect">
-      <summary className="raw-inspect-toggle">raw JSON</summary>
-      <pre className="event-detail-raw">{JSON.stringify(event, null, 2)}</pre>
-    </details>
   )
 }

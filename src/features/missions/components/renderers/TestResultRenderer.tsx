@@ -1,4 +1,5 @@
 import type { TestResultEvent } from '../../../../shared/types/engineeringEvents'
+import { RawInspect } from './RawInspect'
 
 interface Props {
   event: TestResultEvent
@@ -42,14 +43,5 @@ export function TestResultRenderer({ event }: Props) {
       )}
       <RawInspect event={event} />
     </div>
-  )
-}
-
-function RawInspect({ event }: { event: TestResultEvent }) {
-  return (
-    <details className="raw-inspect">
-      <summary className="raw-inspect-toggle">raw JSON</summary>
-      <pre className="event-detail-raw">{JSON.stringify(event, null, 2)}</pre>
-    </details>
   )
 }

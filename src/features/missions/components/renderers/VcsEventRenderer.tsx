@@ -1,4 +1,5 @@
 import type { VcsEvent } from '../../../../shared/types/engineeringEvents'
+import { RawInspect } from './RawInspect'
 
 interface Props {
   event: VcsEvent
@@ -16,8 +17,15 @@ const ACTION_LABEL: Record<VcsEvent['action'], string> = {
   pr_opened: 'PR opened'
 }
 
+/** Only http(s) URLs may become clickable — payloads are agent-influenced. */
+function safePrUrl(url: string | undefined): string | null {
+  if (!url || !/^https?:\/\//i.test(url)) return null
+  return url
+}
+
 export function VcsEventRenderer({ event }: Props) {
   const shortSha = event.commitSha ? event.commitSha.slice(0, 7) : null
+  const prUrl = safePrUrl(event.prUrl)
 
   return (
     <div className="renderer-vcs-event">
@@ -32,10 +40,10 @@ export function VcsEventRenderer({ event }: Props) {
             {shortSha}
           </span>
         )}
-        {event.prUrl && (
+        {prUrl && (
           <a
             className="vcs-pr-link"
-            href={event.prUrl}
+            href={prUrl}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -46,14 +54,5 @@ export function VcsEventRenderer({ event }: Props) {
       </div>
       <RawInspect event={event} />
     </div>
-  )
-}
-
-function RawInspect({ event }: { event: VcsEvent }) {
-  return (
-    <details className="raw-inspect">
-      <summary className="raw-inspect-toggle">raw JSON</summary>
-      <pre className="event-detail-raw">{JSON.stringify(event, null, 2)}</pre>
-    </details>
   )
 }

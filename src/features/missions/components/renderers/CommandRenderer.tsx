@@ -1,19 +1,9 @@
 import type { CommandRunEvent } from '../../../../shared/types/engineeringEvents'
+import { RawInspect } from './RawInspect'
+import { statusPillClass } from './statusPill'
 
 interface Props {
   event: CommandRunEvent
-}
-
-const STATUS_CLASS: Record<CommandRunEvent['status'], string> = {
-  running: 'status-pill--running',
-  success: 'status-pill--success',
-  failed: 'status-pill--failed'
-}
-
-const STATUS_LABEL: Record<CommandRunEvent['status'], string> = {
-  running: 'running',
-  success: 'success',
-  failed: 'failed'
 }
 
 export function CommandRenderer({ event }: Props) {
@@ -26,8 +16,8 @@ export function CommandRenderer({ event }: Props) {
           <span className="terminal-command">{event.command}</span>
         </div>
         <div className="terminal-meta-row">
-          <span className={`status-pill ${STATUS_CLASS[event.status]}`}>
-            {STATUS_LABEL[event.status]}
+          <span className={`status-pill ${statusPillClass(event.status)}`}>
+            {event.status}
           </span>
           {event.exitCode != null && (
             <span className="terminal-exit-code">exit {event.exitCode}</span>
@@ -48,14 +38,5 @@ export function CommandRenderer({ event }: Props) {
       </div>
       <RawInspect event={event} />
     </div>
-  )
-}
-
-function RawInspect({ event }: { event: CommandRunEvent }) {
-  return (
-    <details className="raw-inspect">
-      <summary className="raw-inspect-toggle">raw JSON</summary>
-      <pre className="event-detail-raw">{JSON.stringify(event, null, 2)}</pre>
-    </details>
   )
 }

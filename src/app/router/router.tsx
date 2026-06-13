@@ -32,11 +32,13 @@ export const router = createBrowserRouter([
           { index: true, element: lazyPage(<WorkspaceSplitPage />) },
           { path: 'ch/:channelId', element: lazyPage(<WorkspaceSplitPage />) },
           { path: 'doc/:documentId', element: lazyPage(<WorkspaceSplitPage />) },
-          { path: 'ch/:channelId/doc/:documentId', element: lazyPage(<WorkspaceSplitPage />) }
+          { path: 'ch/:channelId/doc/:documentId', element: lazyPage(<WorkspaceSplitPage />) },
+          // Mission pages live INSIDE the shell: they need the sidebar/nav,
+          // workspace membership gating, realtime wiring, and store sync.
+          { path: 'missions', element: lazyPage(<MissionList />) },
+          { path: 'mission/:contextId', element: lazyPage(<MissionView />) }
         ]
-      },
-      { path: '/w/:workspaceId/missions', element: lazyPage(<MissionList />) },
-      { path: '/w/:workspaceId/mission/:contextId', element: lazyPage(<MissionView />) }
+      }
     ]
   },
   { path: '*', element: lazyPage(<NotFoundPage />) }

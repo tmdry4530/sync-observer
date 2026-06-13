@@ -95,7 +95,8 @@ const VcsEventSchema = z.object({
   action: z.enum(['branch_created', 'commit', 'pr_opened']),
   branch: z.string().optional(),
   commitSha: z.string().optional(),
-  prUrl: z.string().optional(),
+  // http(s) only: this value becomes a clickable link in the Mission View.
+  prUrl: z.string().regex(/^https?:\/\//i, 'prUrl must be an http(s) URL').optional(),
   summary: z.string().optional()
 })
 

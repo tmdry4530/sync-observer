@@ -14,7 +14,8 @@ export interface MissionSummaryMeta {
 
 /** One event in the context-scoped engineering timeline. */
 export interface MissionEvent {
-  seq: number
+  /** a2a_task_events.seq is a Postgres bigint — serialized as a STRING on the wire. */
+  seq: string
   taskId: string
   type: string
   createdAt: string

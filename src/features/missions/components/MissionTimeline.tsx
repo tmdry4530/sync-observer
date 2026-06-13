@@ -1,5 +1,6 @@
-import type { EngineeringTaskEvent } from '../hooks/useMissionQuery'
+import type { EngineeringMissionEvent } from '../hooks/useMissionQuery'
 import type { EngineeringEventKind } from '../../../shared/types/engineeringEvents'
+import { eventDisplayTime, relativeTime } from '../missionTime'
 
 const KIND_ICON: Record<EngineeringEventKind, string> = {
   agent_status: '🤖',
@@ -21,7 +22,7 @@ const KIND_LABEL: Record<EngineeringEventKind, string> = {
   vcs_event: 'vcs'
 }
 
-function summariseEvent(ev: EngineeringTaskEvent): string {
+function summariseEvent(ev: EngineeringMissionEvent): string {
   const eng = ev.engineeringEvent
   switch (eng.kind) {
     case 'agent_status':
@@ -43,20 +44,10 @@ function summariseEvent(ev: EngineeringTaskEvent): string {
   }
 }
 
-function relativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const diffMin = Math.floor(diffMs / 60_000)
-  if (diffMin < 1) return '방금 전'
-  if (diffMin < 60) return `${diffMin}분 전`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}시간 전`
-  return `${Math.floor(diffHr / 24)}일 전`
-}
-
 interface MissionTimelineProps {
-  events: EngineeringTaskEvent[]
-  selectedSeq: number | null
-  onSelect: (seq: number) => void
+  events: EngineeringMissionEvent[]
+  selectedSeq: string | null
+  onSelect: (seq: string) => void
 }
 
 export function MissionTimeline({ events, selectedSeq, onSelect }: MissionTimelineProps) {
@@ -69,6 +60,7 @@ export function MissionTimeline({ events, selectedSeq, onSelect }: MissionTimeli
         <ol className="timeline-list">
           {events.map((ev) => {
             const eng = ev.engineeringEvent
+            const displayTime = eventDisplayTime(eng.timestamp, ev.createdAt)
             const isSelected = ev.seq === selectedSeq
             return (
               <li
@@ -89,8 +81,8 @@ export function MissionTimeline({ events, selectedSeq, onSelect }: MissionTimeli
                 </div>
                 <div className="timeline-meta">
                   {eng.demo ? <span className="demo-badge">demo</span> : null}
-                  <time className="timeline-time" dateTime={ev.createdAt} title={ev.createdAt}>
-                    {relativeTime(ev.createdAt)}
+                  <time className="timeline-time" dateTime={displayTime} title={displayTime}>
+                    {relativeTime(displayTime)}
                   </time>
                 </div>
               </li>

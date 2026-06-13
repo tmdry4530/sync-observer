@@ -120,13 +120,52 @@ export function isEngineeringEventKind(k: string): k is EngineeringEventKind {
   return (ENGINEERING_EVENT_KINDS as readonly string[]).includes(k)
 }
 
+const PIPELINE_STAGES: readonly string[] = ['planning', 'implementation', 'testing', 'review', 'merge']
+const PIPELINE_STAGE_STATUSES: readonly string[] = ['pending', 'active', 'done', 'failed']
+
+/** Required string fields per kind, beyond the common `timestamp`. */
+const REQUIRED_STRINGS: Record<EngineeringEventKind, readonly string[]> = {
+  agent_status: ['agentId', 'role', 'status', 'currentAction'],
+  pipeline_stage: [],
+  file_edit: ['agentId', 'path', 'unifiedDiff', 'summary'],
+  command_run: ['agentId', 'command'],
+  test_result: ['agentId', 'suite'],
+  review_comment: ['agentId', 'path', 'comment'],
+  vcs_event: ['agentId']
+}
+
+/** Required enum-valued fields per kind (field name → allowed values). */
+const REQUIRED_ENUMS: Partial<
+  Record<EngineeringEventKind, ReadonlyArray<readonly [string, readonly string[]]>>
+> = {
+  pipeline_stage: [
+    ['stage', PIPELINE_STAGES],
+    ['status', PIPELINE_STAGE_STATUSES]
+  ],
+  command_run: [['status', ['running', 'success', 'failed']]],
+  test_result: [['status', ['passed', 'failed']]],
+  review_comment: [['severity', ['info', 'warn', 'error']]],
+  vcs_event: [['action', ['branch_created', 'commit', 'pr_opened']]]
+}
+
 /**
  * Safely parse an unknown payload as an EngineeringEvent.
- * Returns null if the payload is missing required fields.
+ * Returns null if the payload is missing required fields, so renderers can
+ * dereference required fields without crashing the whole Mission View on one
+ * malformed row (the repository does not validate payloads on insert).
  */
 export function parseEngineeringEvent(value: unknown): EngineeringEvent | null {
   if (typeof value !== 'object' || value === null) return null
   const obj = value as Record<string, unknown>
-  if (!isEngineeringEventKind(obj.kind as string)) return null
+  const kind = obj.kind
+  if (typeof kind !== 'string' || !isEngineeringEventKind(kind)) return null
+  if (typeof obj.timestamp !== 'string') return null
+  for (const field of REQUIRED_STRINGS[kind]) {
+    if (typeof obj[field] !== 'string') return null
+  }
+  for (const [field, values] of REQUIRED_ENUMS[kind] ?? []) {
+    const v = obj[field]
+    if (typeof v !== 'string' || !values.includes(v)) return null
+  }
   return obj as unknown as EngineeringEvent
 }

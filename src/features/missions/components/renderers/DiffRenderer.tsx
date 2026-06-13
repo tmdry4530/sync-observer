@@ -1,4 +1,5 @@
 import type { FileEditEvent } from '../../../../shared/types/engineeringEvents'
+import { RawInspect } from './RawInspect'
 
 interface DiffLine {
   type: 'added' | 'removed' | 'hunk' | 'context' | 'blank'
@@ -52,14 +53,5 @@ export function DiffRenderer({ event }: Props) {
       )}
       <RawInspect event={event} />
     </div>
-  )
-}
-
-function RawInspect({ event }: { event: FileEditEvent }) {
-  return (
-    <details className="raw-inspect">
-      <summary className="raw-inspect-toggle">raw JSON</summary>
-      <pre className="event-detail-raw">{JSON.stringify(event, null, 2)}</pre>
-    </details>
   )
 }

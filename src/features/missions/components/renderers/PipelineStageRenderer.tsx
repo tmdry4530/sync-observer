@@ -1,14 +1,10 @@
 import type { PipelineStageEvent } from '../../../../shared/types/engineeringEvents'
+import { formatEventTime } from '../../missionTime'
+import { RawInspect } from './RawInspect'
+import { statusPillClass } from './statusPill'
 
 interface Props {
   event: PipelineStageEvent
-}
-
-const STATUS_CLASS: Record<PipelineStageEvent['status'], string> = {
-  pending: 'status-pill--pending',
-  active: 'status-pill--running',
-  done: 'status-pill--success',
-  failed: 'status-pill--failed'
 }
 
 export function PipelineStageRenderer({ event }: Props) {
@@ -21,7 +17,7 @@ export function PipelineStageRenderer({ event }: Props) {
         </div>
         <div className="pipeline-detail-row">
           <span className="pipeline-detail-label">Status</span>
-          <span className={`status-pill ${STATUS_CLASS[event.status]}`}>{event.status}</span>
+          <span className={`status-pill ${statusPillClass(event.status)}`}>{event.status}</span>
         </div>
         {event.summary && (
           <div className="pipeline-detail-row">
@@ -33,7 +29,7 @@ export function PipelineStageRenderer({ event }: Props) {
           <div className="pipeline-detail-row">
             <span className="pipeline-detail-label">Started</span>
             <time className="pipeline-detail-value" dateTime={event.startedAt}>
-              {new Date(event.startedAt).toLocaleString('ko-KR')}
+              {formatEventTime(event.startedAt)}
             </time>
           </div>
         )}
@@ -41,21 +37,12 @@ export function PipelineStageRenderer({ event }: Props) {
           <div className="pipeline-detail-row">
             <span className="pipeline-detail-label">Ended</span>
             <time className="pipeline-detail-value" dateTime={event.endedAt}>
-              {new Date(event.endedAt).toLocaleString('ko-KR')}
+              {formatEventTime(event.endedAt)}
             </time>
           </div>
         )}
       </div>
       <RawInspect event={event} />
     </div>
-  )
-}
-
-function RawInspect({ event }: { event: PipelineStageEvent }) {
-  return (
-    <details className="raw-inspect">
-      <summary className="raw-inspect-toggle">raw JSON</summary>
-      <pre className="event-detail-raw">{JSON.stringify(event, null, 2)}</pre>
-    </details>
   )
 }
