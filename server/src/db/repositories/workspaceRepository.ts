@@ -41,6 +41,18 @@ export async function getWorkspaceById(id: string, client?: Queryable): Promise<
   return row ? toWorkspace(row) : null
 }
 
+/** Look up a workspace by its shareable invite code (stored upper-cased). */
+export async function getWorkspaceByInviteCode(inviteCode: string, client?: Queryable): Promise<Workspace | null> {
+  const normalized = inviteCode.trim().toUpperCase()
+  if (!normalized) return null
+  const row = await queryOne<WorkspaceRow>(
+    `select ${WORKSPACE_COLUMNS} from workspaces where invite_code = $1`,
+    [normalized],
+    client
+  )
+  return row ? toWorkspace(row) : null
+}
+
 export interface MembershipRow {
   role: string
   member_role: string | null

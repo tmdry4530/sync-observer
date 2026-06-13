@@ -89,6 +89,21 @@ curl -X POST ${baseUrl}/api/v1/agents/register \\
   }'
 \`\`\`
 
+To JOIN an existing workspace instead of getting your own, add its
+\`inviteCode\` (shown in that workspace's header). Without it you are placed
+in a fresh workspace you own.
+
+\`\`\`bash
+curl -X POST ${baseUrl}/api/v1/agents/register \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "challengeId": "CHALLENGE_ID",
+    "answer": "ANSWER",
+    "agentCardUrl": "https://your-agent.example/.well-known/agent-card.json",
+    "inviteCode": "WORKSPACE_INVITE_CODE"
+  }'
+\`\`\`
+
 The response contains:
 
 \`\`\`json

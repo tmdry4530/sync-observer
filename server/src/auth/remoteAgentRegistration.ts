@@ -3,7 +3,7 @@ import type { AuthAgentIdentity, ExternalAgentRegistrationResult } from '../type
 import { fetchAgentCard } from '../a2a/agentCardFetcher.js'
 import { assertSafeWebhookUrl } from '../a2a/push.js'
 import { withTransaction } from '../db/query.js'
-import { createWorkspace, addWorkspaceMember, setWorkspaceOwner } from '../db/repositories/workspaceRepository.js'
+import { createWorkspace, addWorkspaceMember, getWorkspaceById, setWorkspaceOwner } from '../db/repositories/workspaceRepository.js'
 import { DEFAULT_AGENTS, ensureDefaultAgents } from '../db/repositories/agentRepository.js'
 import {
   createRemoteAgent,
@@ -21,6 +21,12 @@ export interface RegisterExternalAgentInput {
   displayName?: string
   slug?: string
   workspaceName?: string
+  /**
+   * When set, the external agent JOINS this existing workspace as a member
+   * instead of getting a fresh workspace it owns. The caller resolves an
+   * invite code to a real workspace id before calling.
+   */
+  joinWorkspaceId?: string
 }
 
 const RESERVED_INTERNAL_SLUGS = new Set(DEFAULT_AGENTS.map((agent) => agent.slug))
@@ -69,8 +75,18 @@ export async function registerExternalAgent(
   const workspaceName = (input.workspaceName?.trim() || `${displayName} Workspace`).slice(0, 120)
   const verifyToken = generateToken(24)
 
+  const joinWorkspaceId = input.joinWorkspaceId
+
   return withTransaction(async (client) => {
-    const workspace = await createWorkspace({ name: workspaceName }, client)
+    // Join an existing workspace (invite-code path) vs. provision a new one.
+    let workspace
+    if (joinWorkspaceId) {
+      const target = await getWorkspaceById(joinWorkspaceId, client)
+      if (!target) throw new Error(`registerExternalAgent: join workspace ${joinWorkspaceId} not found`)
+      workspace = target
+    } else {
+      workspace = await createWorkspace({ name: workspaceName }, client)
+    }
     const slug = await uniqueRemoteSlug(workspace.id, input.slug ?? displayName)
     const created = await createRemoteAgent(
       {
@@ -89,9 +105,14 @@ export async function registerExternalAgent(
       client
     )
     await setRemoteAgentOwner(created.agent.id, created.participantId, client)
-    await setWorkspaceOwner(workspace.id, created.participantId, client)
-    await addWorkspaceMember({ workspaceId: workspace.id, participantId: created.participantId, role: 'owner' }, client)
-    await ensureDefaultAgents(workspace.id, client)
+    if (joinWorkspaceId) {
+      // Joining agents are members; the workspace keeps its owner and roster.
+      await addWorkspaceMember({ workspaceId: workspace.id, participantId: created.participantId, role: 'member' }, client)
+    } else {
+      await setWorkspaceOwner(workspace.id, created.participantId, client)
+      await addWorkspaceMember({ workspaceId: workspace.id, participantId: created.participantId, role: 'owner' }, client)
+      await ensureDefaultAgents(workspace.id, client)
+    }
     const token = await createRemoteAgentToken(
       { remoteAgentId: created.agent.id, scopes: [...ALL_AUTH_SCOPES], pepper: config.agentTokenPepper },
       client
@@ -108,7 +129,8 @@ export async function registerExternalAgent(
     return {
       credential: { agentId: agent.id, secret: token.token },
       identity,
-      workspace: { ...workspace, ownerParticipantId: created.participantId },
+      // New workspaces are owned by the registrant; joined ones keep their owner.
+      workspace: joinWorkspaceId ? workspace : { ...workspace, ownerParticipantId: created.participantId },
       agent: toRemoteAgentProfile(agent),
       verification: {
         type: 'well-known',

@@ -14,6 +14,7 @@ import { RemoteFetchError } from '../../a2a/agentCardFetcher.js'
 import { createChallenge, consumeChallenge, findUsableChallenge } from '../../db/repositories/challengeRepository.js'
 import { getAgentById } from '../../db/repositories/agentRepository.js'
 import { getRemoteAgentById } from '../../db/repositories/remoteAgentRepository.js'
+import { getWorkspaceByInviteCode } from '../../db/repositories/workspaceRepository.js'
 import { resolveAgentToken } from '../../auth/agentToken.js'
 import { writeAuditLog } from '../../db/repositories/auditRepository.js'
 import { hashIp } from '../../utils/crypto.js'
@@ -73,6 +74,18 @@ async function issueRegistrationChallenge(config: ServerConfig) {
   return { challengeId: row.id, prompt: generated.prompt, expiresAt: expiresAt.toISOString() }
 }
 
+/**
+ * Resolve an optional invite code to a workspace id the new agent should JOIN.
+ * Returns undefined when no code is supplied (→ fresh workspace); throws 400
+ * when a code is supplied but matches no workspace.
+ */
+async function resolveJoinWorkspaceId(inviteCode: unknown): Promise<string | undefined> {
+  if (typeof inviteCode !== 'string' || !inviteCode.trim()) return undefined
+  const workspace = await getWorkspaceByInviteCode(inviteCode)
+  if (!workspace) throw badRequest('invalid_invite_code', '유효하지 않은 초대 코드입니다.')
+  return workspace.id
+}
+
 async function assertSolvedChallenge(
   ctx: RequestContext,
   config: ServerConfig,
@@ -129,11 +142,13 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
       displayName?: string
       slug?: string
       workspaceName?: string
+      inviteCode?: string
     }>()
     if (!body.challengeId || typeof body.answer !== 'string' || !body.agentCardUrl) {
       throw badRequest('missing_fields', 'challengeId, answer, agentCardUrl이 필요합니다.')
     }
 
+    const joinWorkspaceId = await resolveJoinWorkspaceId(body.inviteCode)
     await assertSolvedChallenge(ctx, config, body.challengeId, body.answer)
     let result
     try {
@@ -141,7 +156,8 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
         agentCardUrl: body.agentCardUrl,
         ...(body.displayName ? { displayName: body.displayName } : {}),
         ...(body.slug ? { slug: body.slug } : {}),
-        ...(body.workspaceName ? { workspaceName: body.workspaceName } : {})
+        ...(body.workspaceName ? { workspaceName: body.workspaceName } : {}),
+        ...(joinWorkspaceId ? { joinWorkspaceId } : {})
       })
     } catch (error) {
       mapRegistrationError(error)
@@ -198,6 +214,7 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
       slug?: string
       role?: AgentRole
       description?: string
+      inviteCode?: string
     }>()
     if (!body.challengeId || typeof body.answer !== 'string') {
       throw badRequest('missing_fields', 'challengeId와 answer가 필요합니다.')
@@ -206,12 +223,14 @@ export function registerAuthRoutes(router: Router, config: ServerConfig): void {
       throw badRequest('missing_fields', '에이전트 표시 이름(displayName)이 필요합니다.')
     }
 
+    const joinWorkspaceId = await resolveJoinWorkspaceId(body.inviteCode)
     await assertSolvedChallenge(ctx, config, body.challengeId, body.answer)
     const result = await registerAgent(config, {
       displayName: body.displayName,
       ...(body.slug ? { slug: body.slug } : {}),
       ...(body.role ? { role: body.role } : {}),
-      ...(body.description ? { description: body.description } : {})
+      ...(body.description ? { description: body.description } : {}),
+      ...(joinWorkspaceId ? { joinWorkspaceId } : {})
     })
     await writeAuditLog({
       workspaceId: result.workspace.id,
