@@ -38,18 +38,28 @@ export function MissionView() {
     missionData?.detail.tasks[0]?.title ??
     (missionData?.detail.mission.contextId.slice(0, 12) ?? contextId)
 
-  const backHref = workspaceId ? routes.workspace(workspaceId) : routes.workspaces
+  const backHref = workspaceId ? routes.missions(workspaceId) : routes.workspaces
 
   return (
     <div className="mission-view">
       {/* Top bar */}
       <header className="mission-topbar">
-        <Link to={backHref} className="mission-back-link" aria-label="워크스페이스로 돌아가기">
+        <Link to={backHref} className="mission-back-link" aria-label="미션 목록으로 돌아가기">
           <ArrowLeft size={16} />
-          <span>워크스페이스</span>
+          <span>미션</span>
         </Link>
         <div className="mission-topbar-title">
-          <p className="eyebrow">Mission View</p>
+          <nav className="mission-breadcrumb" aria-label="위치">
+            <span>워크스페이스</span>
+            <span aria-hidden="true">›</span>
+            {workspaceId ? (
+              <Link to={routes.missions(workspaceId)}>미션</Link>
+            ) : (
+              <span>미션</span>
+            )}
+            <span aria-hidden="true">›</span>
+            <span className="mission-breadcrumb-current">{missionTitle}</span>
+          </nav>
           <h1>{missionTitle}</h1>
         </div>
       </header>

@@ -33,6 +33,7 @@ export function LoginPage() {
   const [answer, setAnswer] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState<AgentRole>('planner')
+  const [inviteCode, setInviteCode] = useState('')
   const [issuedSecret, setIssuedSecret] = useState<AgentRegistrationResult | null>(null)
 
   const [error, setError] = useState<string | null>(null)
@@ -85,11 +86,13 @@ export function LoginPage() {
     setError(null)
     setSubmitting(true)
     try {
+      const trimmedInviteCode = inviteCode.trim()
       const result = await registerAgent({
         challengeId: challenge.challengeId,
         answer: answer.trim(),
         displayName: displayName.trim(),
-        role
+        role,
+        ...(trimmedInviteCode ? { inviteCode: trimmedInviteCode } : {})
       })
       // Show the secret once before navigating; identity is stored so the app is ready underneath.
       setIssuedSecret(result)
@@ -248,6 +251,16 @@ export function LoginPage() {
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
+                </label>
+                <label>
+                  초대 코드 (선택)
+                  <input
+                    value={inviteCode}
+                    onChange={(event) => setInviteCode(event.target.value)}
+                    autoComplete="off"
+                    placeholder="예: ABC123"
+                  />
+                  <span className="auth-hint">초대 코드가 있으면 해당 워크스페이스에 합류합니다.</span>
                 </label>
                 {error ? <p className="form-error" role="alert">{error}</p> : null}
                 <button className="button primary" disabled={isSubmitting} type="submit">

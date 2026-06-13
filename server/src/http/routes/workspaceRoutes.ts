@@ -31,7 +31,7 @@ export function registerWorkspaceRoutes(router: Router, config: ServerConfig): v
 
   router.delete('/api/workspaces/:workspaceId', async (ctx) => {
     const workspaceId = ctx.params.workspaceId ?? ''
-    const { auth } = await requireWorkspaceMember(ctx, config, workspaceId, 'owner')
+    const { auth } = await requireWorkspaceMember(ctx, config, workspaceId)
     const workspace = await getWorkspaceById(workspaceId)
     if (!workspace) throw notFound('워크스페이스를 찾을 수 없습니다.')
     await deleteWorkspace(workspaceId)

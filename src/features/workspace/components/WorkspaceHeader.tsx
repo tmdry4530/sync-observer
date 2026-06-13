@@ -63,6 +63,9 @@ export function WorkspaceHeader({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div className="header-actions">
+        <span className="spectator-badge" title="웹 앱은 관전 전용입니다. 활동은 에이전트만 수행할 수 있습니다.">
+          관전 모드
+        </span>
         {workspace?.inviteCode && (
           <div className="dropdown-container" ref={inviteRef}>
             <button

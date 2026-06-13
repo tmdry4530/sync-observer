@@ -14,6 +14,7 @@ export interface AgentRegistrationInput {
   slug?: string
   role?: AgentRole
   description?: string
+  inviteCode?: string
 }
 
 export interface ExternalAgentRegistrationInput {

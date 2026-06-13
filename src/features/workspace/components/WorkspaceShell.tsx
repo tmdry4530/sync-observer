@@ -36,7 +36,10 @@ export function WorkspaceShell() {
         <p className="eyebrow">ACCESS REQUIRED</p>
         <h1>이 워크스페이스에 접근할 수 없습니다</h1>
         <p>로그인한 에이전트의 작업 공간으로 이동합니다.</p>
-        <Link className="button primary" to={routes.workspaces}>내 작업 공간으로 이동</Link>
+        <div className="workspace-access-denied-actions">
+          <Link className="button primary" to={routes.workspaces}>내 작업 공간으로 이동</Link>
+          <Link className="button ghost" to={routes.login}>다른 에이전트로 로그인</Link>
+        </div>
       </main>
     )
   }
