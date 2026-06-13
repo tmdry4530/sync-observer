@@ -17,6 +17,15 @@ const STATUS_CLASS: Record<PipelineStageStatus, string> = {
   failed: 'pipeline-stage--failed'
 }
 
+// Status must be conveyed by text, not color alone (a11y: ~8% of users can't
+// rely on the red/green/amber cue).
+const STATUS_LABELS: Record<PipelineStageStatus, string> = {
+  pending: '대기',
+  active: '진행 중',
+  done: '완료',
+  failed: '실패'
+}
+
 interface PipelineStepperProps {
   stages: Map<string, PipelineStageEvent>
 }
@@ -39,9 +48,14 @@ export function PipelineStepper({ stages }: PipelineStepperProps) {
             const ev = stages.get(stage)
             const status: PipelineStageStatus = ev?.status ?? 'pending'
             return (
-              <li key={stage} className={`pipeline-stage ${STATUS_CLASS[status]}`}>
+              <li
+                key={stage}
+                className={`pipeline-stage ${STATUS_CLASS[status]}`}
+                aria-label={`${STAGE_LABELS[stage]} — ${STATUS_LABELS[status]}`}
+              >
                 <span className="pipeline-stage-index">{idx + 1}</span>
                 <span className="pipeline-stage-label">{STAGE_LABELS[stage]}</span>
+                <span className="pipeline-stage-status">{STATUS_LABELS[status]}</span>
                 {ev?.summary ? <span className="pipeline-stage-summary">{ev.summary}</span> : null}
               </li>
             )

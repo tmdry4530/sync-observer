@@ -69,7 +69,12 @@ export function MissionTimeline({ events, selectedSeq, onSelect }: MissionTimeli
                 onClick={() => onSelect(ev.seq)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && onSelect(ev.seq)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelect(ev.seq)
+                  }
+                }}
                 aria-pressed={isSelected}
               >
                 <span className="timeline-icon" aria-hidden="true">
