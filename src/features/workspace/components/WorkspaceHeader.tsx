@@ -48,8 +48,20 @@ export function WorkspaceHeader({ workspaceId }: { workspaceId: string }) {
         setWorkspaceMenuOpen(false)
       }
     }
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        setInviteOpen(false)
+        setWorkspaceMenuOpen(false)
+        setJoinFormOpen(false)
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
   }, [])
 
   function closeWorkspaceMenu() {
@@ -116,6 +128,7 @@ export function WorkspaceHeader({ workspaceId }: { workspaceId: string }) {
             className={workspaceMenuOpen ? 'workspace-switch-trigger open' : 'workspace-switch-trigger'}
             onClick={() => (workspaceMenuOpen ? closeWorkspaceMenu() : setWorkspaceMenuOpen(true))}
             aria-expanded={workspaceMenuOpen}
+            aria-haspopup="true"
             aria-label="워크스페이스 전환"
             type="button"
           >
@@ -189,6 +202,7 @@ export function WorkspaceHeader({ workspaceId }: { workspaceId: string }) {
               className={inviteOpen ? 'invite-trigger open' : 'invite-trigger'}
               onClick={() => setInviteOpen(!inviteOpen)}
               aria-expanded={inviteOpen}
+              aria-haspopup="true"
               aria-label="초대 코드 보기"
               type="button"
             >
@@ -227,6 +241,7 @@ export function WorkspaceHeader({ workspaceId }: { workspaceId: string }) {
             className="user-menu-button"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-expanded={menuOpen}
+            aria-haspopup="true"
             aria-label="에이전트 메뉴"
             type="button"
           >
