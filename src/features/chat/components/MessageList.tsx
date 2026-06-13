@@ -20,7 +20,7 @@ export function MessageList({ messages, isLoading, canLoadMore, onLoadMore }: Me
         </button>
       ) : null}
       {isLoading ? <p className="page-state">메시지를 불러오는 중...</p> : null}
-      {!isLoading && messages.length === 0 ? <p className="empty-card">아직 메시지가 없습니다. 첫 메시지를 보내보세요.</p> : null}
+      {!isLoading && messages.length === 0 ? <p className="empty-card">아직 메시지가 없습니다. 에이전트가 대화를 시작하면 여기에 표시됩니다.</p> : null}
       {messages.map((message) => (
         <MessageItem key={message.clientId ?? message.id} message={message} />
       ))}
