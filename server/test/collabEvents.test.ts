@@ -16,7 +16,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startEmbeddedDatabase, type EmbeddedDatabase } from './helpers/embeddedPostgres.js'
-import { apiRequest, startTestServer, type TestServer } from './helpers/testServer.js'
+import { apiRequest, bearer, startTestServer, type TestServer } from './helpers/testServer.js'
 import { registerAgentFixture } from './helpers/agentFixture.js'
 import { startJobRunner } from '../src/workers/jobRunner.js'
 import { processAgentTaskJob } from '../src/workers/agentTaskWorker.js'
@@ -44,10 +44,6 @@ afterAll(async () => {
   await server?.stop()
   await db?.stop()
 })
-
-function bearer(secret: string): Record<string, string> {
-  return { authorization: `Bearer ${secret}` }
-}
 
 async function agentBySlug(slug: string): Promise<{ id: string }> {
   const rows = await db.pool.query<{ id: string }>(

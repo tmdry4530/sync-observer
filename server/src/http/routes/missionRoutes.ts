@@ -2,7 +2,7 @@ import type { ServerConfig } from '../../config.js'
 import type { Router } from '../router.js'
 import { json } from '../response.js'
 import { notFound } from '../errors.js'
-import { requireWorkspaceMember } from '../../auth/middleware.js'
+import { requireAuth, requireWorkspaceMember } from '../../auth/middleware.js'
 import {
   getContext,
   listEventsByContext,
@@ -12,6 +12,8 @@ import { query } from '../../db/query.js'
 import { getAgentById } from '../../db/repositories/agentRepository.js'
 import { mapEventRowToStreamResponse } from '../../a2a/mapper.js'
 import { ENGINEERING_EVENT_TYPES } from '../../a2a/engineeringEvents.js'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function registerMissionRoutes(router: Router, config: ServerConfig): void {
   /**
@@ -26,6 +28,13 @@ export function registerMissionRoutes(router: Router, config: ServerConfig): voi
    */
   router.get('/api/missions/:contextId', async (ctx) => {
     const contextId = ctx.params.contextId ?? ''
+
+    // Authenticate BEFORE any lookup: an unauthenticated caller must not be
+    // able to distinguish existing from missing contexts (404 vs 401 oracle).
+    await requireAuth(ctx, config)
+
+    // Non-UUID ids 404 here instead of surfacing Postgres 22P02 as a 500.
+    if (!UUID_RE.test(contextId)) throw notFound('미션을 찾을 수 없습니다.')
 
     const context = await getContext(contextId)
     if (!context) throw notFound('미션을 찾을 수 없습니다.')
@@ -58,8 +67,8 @@ export function registerMissionRoutes(router: Router, config: ServerConfig): voi
         role: a.role
       }))
 
+    // visible_to_user filtering happens in SQL (listEventsByContext).
     const events = eventRows
-      .filter((row) => row.visible_to_user)
       .map((row) => ({
         seq: row.seq,
         taskId: row.task_id,
@@ -99,12 +108,12 @@ export function registerMissionRoutes(router: Router, config: ServerConfig): voi
    */
   router.get('/api/workspaces/:workspaceId/missions', async (ctx) => {
     const workspaceId = ctx.params.workspaceId ?? ''
+    if (!UUID_RE.test(workspaceId)) throw notFound('워크스페이스를 찾을 수 없습니다.')
     await requireWorkspaceMember(ctx, config, workspaceId)
 
-    // Inline the engineering type list as SQL literals (safe — values are
-    // compile-time string constants from ENGINEERING_EVENT_TYPES).
-    const engineeringTypes = ENGINEERING_EVENT_TYPES.map((t) => `'${t}'`).join(', ')
-
+    // Events and tasks are aggregated in SEPARATE laterals: a single join of
+    // both tables on context_id would form an events×tasks cartesian product
+    // and multiply event_count by the task count.
     const rows = await query<{
       context_id: string
       channel_id: string | null
@@ -121,19 +130,28 @@ export function registerMissionRoutes(router: Router, config: ServerConfig): voi
          (select t.title from a2a_tasks t
           where t.context_id = c.id order by t.created_at asc limit 1)
                                           as first_task_title,
-         max(e.created_at)               as latest_event_at,
-         count(distinct t2.agent_id)
-           filter (where t2.agent_id is not null)
-                                          as agent_count,
-         count(e.id)                     as event_count
+         ev.latest_event_at,
+         ev.event_count,
+         coalesce(tk.agent_count, 0)     as agent_count
        from a2a_contexts c
-       join a2a_task_events e on e.context_id = c.id
-         and e.event_type in (${engineeringTypes})
-       join a2a_tasks t2 on t2.context_id = c.id
+       cross join lateral (
+         select max(e.created_at) as latest_event_at,
+                count(*)          as event_count
+         from a2a_task_events e
+         where e.context_id = c.id
+           and e.event_type = any($2::a2a_event_type[])
+           and e.visible_to_user
+       ) ev
+       left join lateral (
+         select count(distinct t2.agent_id) as agent_count
+         from a2a_tasks t2
+         where t2.context_id = c.id and t2.agent_id is not null
+       ) tk on true
        where c.workspace_id = $1
-       group by c.id, c.channel_id, c.created_at
-       order by max(e.created_at) desc`,
-      [workspaceId]
+         and ev.event_count > 0
+       order by ev.latest_event_at desc
+       limit 100`,
+      [workspaceId, [...ENGINEERING_EVENT_TYPES]]
     )
 
     const missions = rows.map((row) => ({

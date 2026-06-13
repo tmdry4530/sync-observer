@@ -10,6 +10,11 @@ export interface TestServer {
   stop(): Promise<void>
 }
 
+/** Authorization header for agent-secret bearer auth. */
+export function bearer(secret: string): Record<string, string> {
+  return { authorization: `Bearer ${secret}` }
+}
+
 /** Minimal cookie jar so fetch-based tests can carry the session cookie. */
 export class CookieJar {
   private cookies = new Map<string, string>()

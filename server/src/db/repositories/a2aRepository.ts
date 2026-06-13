@@ -411,13 +411,25 @@ export async function getEventBySeq(seq: string, client?: Queryable): Promise<A2
 }
 
 /**
- * All events for a context, across every task in the collaboration chain,
- * ordered by seq ascending.  Used by the Mission View to show the full
+ * User-visible events for a context, across every task in the collaboration
+ * chain, ordered by seq ascending.  Used by the Mission View to show the
  * engineering timeline for a shared a2a context (= one mission).
+ *
+ * Capped at the NEWEST `MISSION_EVENT_LIMIT` rows (inner desc, outer asc) so
+ * an unbounded mission cannot blow up the response; the tail of the story is
+ * what the Mission View needs.
  */
+const MISSION_EVENT_LIMIT = 1000
+
 export async function listEventsByContext(contextId: string, client?: Queryable): Promise<A2aTaskEventRow[]> {
   return query<A2aTaskEventRow>(
-    `select * from a2a_task_events where context_id = $1 order by seq asc`,
+    `select * from (
+       select * from a2a_task_events
+       where context_id = $1 and visible_to_user
+       order by seq desc
+       limit ${MISSION_EVENT_LIMIT}
+     ) latest
+     order by seq asc`,
     [contextId],
     client
   )

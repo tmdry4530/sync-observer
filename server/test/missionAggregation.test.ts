@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startEmbeddedDatabase, type EmbeddedDatabase } from './helpers/embeddedPostgres.js'
-import { apiRequest, startTestServer, type TestServer } from './helpers/testServer.js'
+import { apiRequest, bearer, startTestServer, type TestServer } from './helpers/testServer.js'
 import { registerAgentFixture } from './helpers/agentFixture.js'
 import { createTaskFromMessage } from '../src/a2a/taskService.js'
 import { appendEvent } from '../src/db/repositories/a2aRepository.js'
@@ -24,10 +24,6 @@ let ownerSecret: string
 let ownerParticipantId: string
 let workspaceId: string
 let ownerAgentId: string
-
-function bearer(secret: string): Record<string, string> {
-  return { authorization: `Bearer ${secret}` }
-}
 
 beforeAll(async () => {
   db = await startEmbeddedDatabase()
@@ -139,7 +135,50 @@ describe('cross-task mission aggregation', () => {
     expect(returnedTypes).toContain('pipeline_stage')
   })
 
-  it('GET /api/workspaces/:id/missions lists the mission once it has engineering events', async () => {
+  it('GET /api/workspaces/:id/missions reports EXACT counts (no events×tasks fan-out)', async () => {
+    // Self-contained fixture: 2 tasks share ONE context, 3 engineering events
+    // total.  A cartesian events×tasks join would report eventCount=6.
+    const origin = await createTaskFromMessage({
+      workspaceId,
+      agentId: ownerAgentId,
+      createdByParticipantId: ownerParticipantId,
+      title: 'Count fixture origin',
+      message: { messageId: newUuid(), parts: [{ text: '카운트 픽스처' }], role: 'ROLE_USER' },
+      enqueue: false
+    })
+    const contextId = origin.task.contextId
+    const second = await createTaskFromMessage({
+      workspaceId,
+      agentId: ownerAgentId,
+      contextId,
+      createdByParticipantId: ownerParticipantId,
+      title: 'Count fixture collab',
+      message: { messageId: newUuid(), parts: [{ text: '@builder 진행' }], role: 'ROLE_USER' },
+      enqueue: false
+    })
+
+    const stamp = new Date().toISOString()
+    const events: Array<{ taskId: string; eventType: 'agent_status' | 'pipeline_stage'; payload: Record<string, unknown> }> = [
+      {
+        taskId: origin.task.id,
+        eventType: 'agent_status',
+        payload: { kind: 'agent_status', agentId: ownerAgentId, role: 'orchestrator', status: 'working', currentAction: '계획', timestamp: stamp }
+      },
+      {
+        taskId: second.task.id,
+        eventType: 'pipeline_stage',
+        payload: { kind: 'pipeline_stage', stage: 'implementation', status: 'active', startedAt: stamp, timestamp: stamp }
+      },
+      {
+        taskId: second.task.id,
+        eventType: 'agent_status',
+        payload: { kind: 'agent_status', agentId: ownerAgentId, role: 'builder', status: 'working', currentAction: '구현', timestamp: stamp }
+      }
+    ]
+    for (const ev of events) {
+      await appendEvent({ taskId: ev.taskId, contextId, eventType: ev.eventType, payload: ev.payload, visibleToUser: true })
+    }
+
     const res = await apiRequest<{
       missions: { contextId: string; agentCount: number; eventCount: number }[]
     }>(server, 'GET', `/api/workspaces/${workspaceId}/missions`, {
@@ -148,8 +187,11 @@ describe('cross-task mission aggregation', () => {
     })
 
     expect(res.status).toBe(200)
-    expect(res.body.missions.length).toBeGreaterThanOrEqual(1)
-    // eventCount should be positive for every listed mission.
+    const mission = res.body.missions.find((m) => m.contextId === contextId)
+    expect(mission).toBeDefined()
+    expect(mission!.eventCount).toBe(3)
+    expect(mission!.agentCount).toBe(1)
+    // eventCount stays positive for every listed mission.
     for (const m of res.body.missions) {
       expect(m.eventCount).toBeGreaterThan(0)
     }
