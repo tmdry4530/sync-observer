@@ -15,6 +15,13 @@ export interface AgentRow {
   model_name: string | null
   system_policy: Record<string, unknown>
   agent_card: Record<string, unknown>
+  /**
+   * The IDENTITY (a participant) that owns/acts through this agent. For a
+   * self-owning agent it equals this agent's own participant; for a presence
+   * agent (an existing identity joined into another workspace) it is the joining
+   * identity's home participant. Nullable only transiently / on identity delete.
+   */
+  credential_participant_id: string | null
   created_at: string
   updated_at: string
 }
@@ -25,7 +32,8 @@ export interface AgentWithParticipant extends AgentRow {
 
 const AGENT_SELECT = `
   a.id, a.workspace_id, a.slug, a.display_name, a.description, a.role, a.status,
-  a.model_provider, a.model_name, a.system_policy, a.agent_card, a.created_at, a.updated_at,
+  a.model_provider, a.model_name, a.system_policy, a.agent_card,
+  a.credential_participant_id, a.created_at, a.updated_at,
   p.id as participant_id
 `
 
@@ -88,6 +96,12 @@ export interface CreateAgentInput {
   modelName?: string | null
   systemPolicy?: Record<string, unknown>
   agentCard?: Record<string, unknown>
+  /**
+   * The owning identity (participant) for this agent. Omit for a self-owning
+   * agent (defaults to the just-created participant); set it to make this a
+   * PRESENCE agent acted through an existing identity in another workspace.
+   */
+  credentialParticipantId?: string
 }
 
 /** Create an agent and its agent participant atomically. */
@@ -123,9 +137,37 @@ export async function createAgent(input: CreateAgentInput, outerClient?: Queryab
     const participantId = participantRows[0]?.id
     if (!participantId) throw new Error('Failed to create agent participant')
 
-    return { ...agent, participant_id: participantId }
+    // Stamp the owning identity. A self-owning agent points at its own
+    // participant; a presence agent points at the joining identity's participant.
+    const credentialParticipantId = input.credentialParticipantId ?? participantId
+    await query(
+      `update agents set credential_participant_id = $1 where id = $2`,
+      [credentialParticipantId, agent.id],
+      client
+    )
+
+    return { ...agent, credential_participant_id: credentialParticipantId, participant_id: participantId }
   }
   return outerClient ? run(outerClient) : withTransaction(run)
+}
+
+/**
+ * Resolve the agent that the given IDENTITY (a participant) acts through in a
+ * specific workspace. Returns the identity's home agent in its home workspace,
+ * or its presence agent in a joined workspace, or null if it has no presence
+ * there yet. (credential_participant_id, workspace_id) is unique, so at most one.
+ */
+export async function getAgentByCredentialIdentity(
+  credentialParticipantId: string,
+  workspaceId: string,
+  client?: Queryable
+): Promise<AgentWithParticipant | null> {
+  return queryOne<AgentWithParticipant>(
+    `select ${AGENT_SELECT} from agents a join participants p on p.agent_id = a.id
+     where a.credential_participant_id = $1 and a.workspace_id = $2`,
+    [credentialParticipantId, workspaceId],
+    client
+  )
 }
 
 export async function updateAgentStatus(

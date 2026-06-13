@@ -9,6 +9,13 @@ export interface AgentTokenContext {
   agentId: string | null
   remoteAgentId: string | null
   participantId: string
+  /**
+   * The owning IDENTITY's participant — the credential's stable identity across
+   * workspaces. In its home workspace this equals participantId; it is what
+   * authorizes and resolves an actable presence in JOINED workspaces. For a
+   * remote agent it equals participantId.
+   */
+  credentialParticipantId: string
   workspaceId: string
   displayName: string
   slug: string

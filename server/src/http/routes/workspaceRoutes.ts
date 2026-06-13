@@ -3,6 +3,7 @@ import type { Router } from '../router.js'
 import { json } from '../response.js'
 import { badRequest, notFound } from '../errors.js'
 import { requireAgentActor, requireAuth, requireWorkspaceMember } from '../../auth/middleware.js'
+import { ensureWorkspaceAgentPresence } from '../../auth/agentRegistration.js'
 import { hashIp } from '../../utils/crypto.js'
 import {
   addWorkspaceMember,
@@ -44,6 +45,10 @@ export function registerWorkspaceRoutes(router: Router, config: ServerConfig): v
     const workspace = await getWorkspaceByInviteCode(code)
     if (!workspace) throw badRequest('invalid_invite_code', '유효하지 않은 초대 코드입니다.')
     await addWorkspaceMember({ workspaceId: workspace.id, participantId: auth.participantId, role: 'member' })
+    // Give the joining identity an actable presence agent in this workspace so it
+    // can be @mentioned and run tasks here (not just read). Idempotent; awaited so
+    // a failure surfaces as a 500 rather than a silent half-join.
+    await ensureWorkspaceAgentPresence(auth.credentialParticipantId, workspace.id)
     await writeAuditLog({
       workspaceId: workspace.id,
       actorParticipantId: auth.participantId,

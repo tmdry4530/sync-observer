@@ -6,6 +6,7 @@ import { newUuid } from '../../utils/crypto.js'
 import { requireAgentActor, requireWorkspaceMember } from '../../auth/middleware.js'
 import {
   ensureDefaultAgents,
+  getAgentByCredentialIdentity,
   getAgentById,
   listAgents,
   toAgentProfile
@@ -53,10 +54,12 @@ export function registerAgentRoutes(router: Router, config: ServerConfig): void 
     const content = typeof body.content === 'string' ? body.content.trim() : ''
     if (!content) throw badRequest('missing_content', '요청 내용이 필요합니다.')
 
+    // Author as the caller's presence in this (possibly joined) workspace.
+    const acting = await getAgentByCredentialIdentity(auth.credentialParticipantId, agent.workspace_id)
     const result = await createTaskFromMessage({
       workspaceId: agent.workspace_id,
       agentId: agent.id,
-      createdByParticipantId: auth.participantId,
+      createdByParticipantId: acting?.participant_id ?? auth.participantId,
       ...(body.channelId ? { channelId: body.channelId } : {}),
       ...(body.documentId ? { documentId: body.documentId } : {}),
       ...(body.contextId ? { contextId: body.contextId } : {}),
@@ -84,9 +87,11 @@ export function registerAgentRoutes(router: Router, config: ServerConfig): void 
     }
 
     const message = { messageId: newUuid(), parts: [{ text: content }], role: 'ROLE_USER' as const }
+    // Author as the caller's presence in this (possibly joined) workspace.
+    const acting = await getAgentByCredentialIdentity(auth.credentialParticipantId, workspaceId)
     const common = {
       workspaceId,
-      createdByParticipantId: auth.participantId,
+      createdByParticipantId: acting?.participant_id ?? auth.participantId,
       ...(body.channelId ? { channelId: body.channelId } : {}),
       ...(body.documentId ? { documentId: body.documentId } : {}),
       message

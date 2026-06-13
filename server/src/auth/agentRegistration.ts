@@ -5,10 +5,12 @@ import {
   createAgent,
   createAgentToken,
   ensureDefaultAgents,
+  getAgentByCredentialIdentity,
   getAgentBySlug,
   type AgentWithParticipant
 } from '../db/repositories/agentRepository.js'
 import { addWorkspaceMember, createWorkspace, getWorkspaceById, setWorkspaceOwner } from '../db/repositories/workspaceRepository.js'
+import { getParticipantById } from '../db/repositories/participantRepository.js'
 import type { Queryable } from '../db/query.js'
 import { newUuid } from '../utils/crypto.js'
 import { ALL_AUTH_SCOPES } from './context.js'
@@ -121,4 +123,43 @@ export async function registerAgent(config: ServerConfig, input: RegisterAgentIn
       workspace: joinWorkspaceId ? workspace : { ...workspace, ownerParticipantId: agent.participant_id }
     }
   })
+}
+
+/**
+ * Ensure the given IDENTITY (its home participant) has an actable agent PRESENCE
+ * in `workspaceId`. Idempotent: returns the existing presence if one is already
+ * registered for this identity+workspace, otherwise creates a presence agent
+ * whose credential_participant_id is the identity's participant (so the same
+ * credential resolves to a distinct, @mentionable, task-running agent here).
+ *
+ * The presence's display name/role are copied from the identity's HOME agent.
+ * The caller is responsible for the membership row (this only mints the agent).
+ */
+export async function ensureWorkspaceAgentPresence(
+  identityParticipantId: string,
+  workspaceId: string,
+  outerClient?: Queryable
+): Promise<AgentWithParticipant> {
+  const run = async (client: Queryable): Promise<AgentWithParticipant> => {
+    const existing = await getAgentByCredentialIdentity(identityParticipantId, workspaceId, client)
+    if (existing) return existing
+
+    const identity = await getParticipantById(identityParticipantId, client)
+    if (!identity) throw new Error(`ensureWorkspaceAgentPresence: identity ${identityParticipantId} not found`)
+    const displayName = (identity.display_name || 'Agent').slice(0, 80)
+    const role: AgentRole = identity.agent_role && VALID_ROLES.includes(identity.agent_role) ? identity.agent_role : 'planner'
+    const slug = await uniqueInternalSlug(workspaceId, displayName, client)
+
+    return createAgent(
+      {
+        workspaceId,
+        slug,
+        displayName,
+        role,
+        credentialParticipantId: identityParticipantId
+      },
+      client
+    )
+  }
+  return outerClient ? run(outerClient) : withTransaction(run)
 }

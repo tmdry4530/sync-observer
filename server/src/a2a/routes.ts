@@ -20,7 +20,8 @@ import {
 } from './taskService.js'
 import { getTask, listTasks, type A2aTaskRow } from '../db/repositories/a2aRepository.js'
 import { listEvents } from '../db/repositories/a2aRepository.js'
-import { getAgentBySlug, ensureDefaultAgents } from '../db/repositories/agentRepository.js'
+import { getAgentBySlug, ensureDefaultAgents, getAgentByCredentialIdentity, type AgentWithParticipant } from '../db/repositories/agentRepository.js'
+import { ensureWorkspaceAgentPresence } from '../auth/agentRegistration.js'
 import { getRemoteAgentById } from '../db/repositories/remoteAgentRepository.js'
 import { remoteGetTask } from './client.js'
 import { bridgeRemoteTaskIntoLocal, buildRemoteTarget } from './remoteBridge.js'
@@ -128,18 +129,39 @@ function readMetadata(value: unknown): Record<string, unknown> {
 }
 
 function resolveWorkspaceForSend(principal: A2aPrincipal, metadata: Record<string, unknown>): string {
+  const requested = typeof metadata.workspaceId === 'string' ? metadata.workspaceId : null
   if (principal.kind === 'agent') {
-    if (!principal.workspaceId) throw notFound()
-    return principal.workspaceId
+    // An agent may target a JOINED workspace via metadata.workspaceId; absent
+    // that it acts in its home workspace. Either way the caller gates the result
+    // through assertWorkspaceAccess before acting.
+    const workspaceId = requested ?? principal.workspaceId
+    if (!workspaceId) throw notFound()
+    return workspaceId
   }
-  const workspaceId = typeof metadata.workspaceId === 'string' ? metadata.workspaceId : null
-  if (!workspaceId) throw badRequest('missing_workspace', 'metadata.workspaceId is required for session-authenticated calls.')
-  return workspaceId
+  if (!requested) throw badRequest('missing_workspace', 'metadata.workspaceId is required for session-authenticated calls.')
+  return requested
+}
+
+/**
+ * The agent the principal ACTS THROUGH in `workspaceId`: its presence agent for
+ * that workspace (home agent in the home workspace, presence agent in a joined
+ * one). Callers MUST have gated `workspaceId` through assertWorkspaceAccess
+ * first; a member without a presence yet gets one minted here. Remote principals
+ * have no internal presence — returns null.
+ */
+async function resolveActingAgent(
+  workspaceId: string,
+  principal: A2aPrincipal
+): Promise<AgentWithParticipant | null> {
+  if (principal.kind !== 'agent') return null
+  const existing = await getAgentByCredentialIdentity(principal.credentialParticipantId, workspaceId)
+  if (existing) return existing
+  return ensureWorkspaceAgentPresence(principal.credentialParticipantId, workspaceId)
 }
 
 async function resolveTargetAgentId(
   workspaceId: string,
-  principal: A2aPrincipal,
+  actingAgent: AgentWithParticipant | null,
   metadata: Record<string, unknown>
 ): Promise<string> {
   const slug = typeof metadata.agentSlug === 'string' ? metadata.agentSlug : null
@@ -148,7 +170,8 @@ async function resolveTargetAgentId(
     if (!agent) throw badRequest('unknown_agent', `No agent with slug '${slug}' in this workspace.`)
     return agent.id
   }
-  if (principal.kind === 'agent' && principal.agentId) return principal.agentId
+  // No explicit target: the acting agent's own presence in this workspace.
+  if (actingAgent) return actingAgent.id
 
   let planner = await getAgentBySlug(workspaceId, 'planner')
   if (!planner) {
@@ -181,10 +204,13 @@ async function prepareSend(ctx: RequestContext, deps: A2aHandlerDeps): Promise<P
     if (!taskRow) throw notFound('Task not found.')
     await assertWorkspaceAccess(principal, taskRow.workspace_id)
     if (isTerminalState(taskRow.status_state)) throw conflict('Task is in a terminal state.', 'task_terminal')
+    // Author the continuation as the principal's presence in the task's workspace
+    // so authorship stays scoped to that (possibly joined) workspace.
+    const actingAgent = await resolveActingAgent(taskRow.workspace_id, principal)
     const task = await sendMessageToExistingTask(taskRow, {
       messageId: message.messageId,
       parts: message.parts as Part[],
-      participantId: principal.participantId,
+      participantId: actingAgent?.participant_id ?? principal.participantId,
       metadata
     })
     if (!task) throw notFound('Task not found.')
@@ -193,12 +219,17 @@ async function prepareSend(ctx: RequestContext, deps: A2aHandlerDeps): Promise<P
 
   const workspaceId = resolveWorkspaceForSend(principal, metadata)
   await assertWorkspaceAccess(principal, workspaceId)
-  const agentId = await resolveTargetAgentId(workspaceId, principal, metadata)
+  // The agent acts THROUGH its presence in this (possibly joined) workspace; that
+  // presence's participant authors the task, so authorship/ownership stay scoped
+  // to the workspace instead of the credential's home agent.
+  const actingAgent = await resolveActingAgent(workspaceId, principal)
+  const agentId = await resolveTargetAgentId(workspaceId, actingAgent, metadata)
+  const createdByParticipantId = actingAgent?.participant_id ?? principal.participantId
 
   const result = await createTaskFromMessage({
     workspaceId,
     agentId,
-    createdByParticipantId: principal.participantId,
+    createdByParticipantId,
     ...(message.contextId ? { contextId: message.contextId } : {}),
     ...(typeof metadata.channelId === 'string' ? { channelId: metadata.channelId } : {}),
     ...(typeof metadata.documentId === 'string' ? { documentId: metadata.documentId } : {}),
