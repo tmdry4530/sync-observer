@@ -83,6 +83,21 @@
 .ap-shell-collapsed .ap-shell-brand-wordmark {
   display: none;
 }
+/* Collapsed: the logo IS the expand trigger (no separate open button). */
+.ap-shell-brand-expand {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  justify-content: center;
+}
+.ap-shell-brand-expand:hover {
+  transform: none;
+  box-shadow: none;
+}
+.ap-shell-brand-expand:hover .ap-shell-brand-icon {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16);
+}
 
 /* collapse toggle */
 .ap-shell-collapse-btn {
