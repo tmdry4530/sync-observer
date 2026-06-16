@@ -187,6 +187,10 @@
 .ap-shell-collapsed .ap-shell-nav-link[aria-current='page']::before {
   display: none;
 }
+/* Hide the primary nav text labels when collapsed (icon-only rail). */
+.ap-shell-collapsed .ap-shell-nav-link .nav-label {
+  display: none;
+}
 
 /* rail section (channels / documents) */
 .ap-shell-section {
