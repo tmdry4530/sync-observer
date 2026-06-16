@@ -12,16 +12,19 @@ export function MessageItem({ message, variant = 'default' }: { message: ChatMes
 
   if (variant === 'workbench') {
     return (
-      <article className={`message-item ap-wb-msg ${isMe ? 'message-mine ap-wb-msg--mine' : 'message-others'}`}>
+      // Use ONLY ap-wb- classes — the legacy .message-* rules in styles.css give
+      // the inner <p> its own surface/primary background, nesting a white (or dark)
+      // box inside the Apple bubble that washes the text out in light mode.
+      <article className={`ap-wb-msg ${isMe ? 'ap-wb-msg--mine' : ''}`}>
         <div className="ap-wb-msg-meta">
           <span title={message.user?.displayName ?? message.userId}>{label}</span>
           <span aria-hidden="true">·</span>
           <time dateTime={message.createdAt}>{time}</time>
         </div>
-        <div className="message-bubble ap-wb-msg-bubble">
+        <div className="ap-wb-msg-bubble">
           <p>{message.content}</p>
           {message.status && message.status !== 'sent' ? (
-            <span className="pending-chip ap-wb-pending-chip">{message.status}</span>
+            <span className="ap-wb-pending-chip">{message.status}</span>
           ) : null}
         </div>
       </article>
