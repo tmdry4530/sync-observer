@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "dev:collector": "tsx watch src/collector/main.ts",
+    "start:collector": "node dist/collector/main.js",
     "worker": "node dist/workers/index.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

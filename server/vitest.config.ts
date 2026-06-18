@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'src/**/__tests__/**/*.test.ts'],
     // Each suite boots a throwaway embedded Postgres cluster, so give them room
     // and keep them serial to avoid spinning up many clusters at once.
     testTimeout: 60_000,
