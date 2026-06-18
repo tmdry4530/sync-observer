@@ -2,6 +2,7 @@ export const routes = {
   home: '/',
   login: '/auth/login',
   contract: '/api-contract',
+  monitor: '/monitor',
   workspaces: '/workspaces',
   workspace: (workspaceId = ':workspaceId') => `/w/${workspaceId}`,
   channel: (workspaceId = ':workspaceId', channelId = ':channelId') => `/w/${workspaceId}/ch/${channelId}`,

@@ -2,6 +2,8 @@ export interface ClientEnv {
   apiUrl: string
   wsUrl: string
   wsAuthMode: 'off' | 'agent'
+  /** Local hermes-monitor collector base URL (M2). Default 127.0.0.1:8787. */
+  collectorUrl: string
 }
 
 export function readClientEnv(): ClientEnv {
@@ -10,7 +12,8 @@ export function readClientEnv(): ClientEnv {
   return {
     apiUrl: import.meta.env.VITE_API_URL?.replace(/\/$/, '') || httpUrlFromWsUrl(wsUrl),
     wsUrl,
-    wsAuthMode: readWsAuthMode()
+    wsAuthMode: readWsAuthMode(),
+    collectorUrl: import.meta.env.VITE_COLLECTOR_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8787'
   }
 }
 

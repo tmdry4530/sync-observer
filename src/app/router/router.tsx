@@ -12,6 +12,7 @@ const WorkspaceSplitPage = lazy(() => import('../../pages/workspace/WorkspaceSpl
 const WorkspaceShell = lazy(() => import('../../features/workspace/components/WorkspaceShell').then((module) => ({ default: module.WorkspaceShell })))
 const MissionView = lazy(() => import('../../features/missions/components/MissionView').then((module) => ({ default: module.MissionView })))
 const MissionList = lazy(() => import('../../features/missions/components/MissionList').then((module) => ({ default: module.MissionList })))
+const MonitorPage = lazy(() => import('../../pages/monitor/MonitorPage').then((module) => ({ default: module.MonitorPage })))
 
 function lazyPage(element: ReactNode) {
   return <Suspense fallback={<div className="page-state">화면을 불러오는 중...</div>}>{element}</Suspense>
@@ -19,6 +20,8 @@ function lazyPage(element: ReactNode) {
 
 export const router = createBrowserRouter([
   { path: routes.home, element: <HomePage /> },
+  // Local hermes-monitor — standalone, no auth shell (single-user localhost tool).
+  { path: routes.monitor, element: lazyPage(<MonitorPage />) },
   { path: routes.contract, element: lazyPage(<ContractPage />) },
   { path: routes.login, element: lazyPage(<LoginPage />) },
   {
