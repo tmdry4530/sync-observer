@@ -333,6 +333,7 @@
 
 /* ---- Manual interrupt -------------------------------------------------- */
 .monitor-interrupt-form { display: flex; flex-direction: column; gap: 0.75rem; max-width: 32rem; }
+.monitor-interrupt-toggle { align-self: flex-start; font-size: 0.74rem; padding: 0.2rem 0.5rem; }
 .monitor-confirm {
   display: flex;
   align-items: center;

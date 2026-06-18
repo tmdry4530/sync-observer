@@ -6,15 +6,22 @@
   - on_post_tool_call / on_subagent_*: 반환값 무시(관찰 전용).
 모든 콜백은 절대 예외를 밖으로 던지지 않는다(에이전트 루프 보호).
 
-interrupt seam (M5 예약):
-  terminal/code에 대해 pre-block으로 못 막은 위반은 interrupt가 필요하나
-  M1에서는 구현하지 않는다. interrupt_resolver 콜러블(기본 no-op)만 주입 가능한
-  깨끗한 seam으로 남긴다. agent 참조가 필요하므로 폼별 바인딩은 M5.
+interrupt seam (M5 결선):
+  플러그인은 hermes 에이전트 실행 스레드에서 IN-PROCESS로 돈다(hermes_cli/plugins.py
+  invoke_hook → cb(**kwargs)). pre_tool_call hook은 실행 스레드에서 동기 디스패치되므로,
+  여기서 tools.interrupt.set_interrupt(True)를 호출하면 *현재(실행) 스레드*가 interrupted
+  set에 등록된다. 이후 같은 턴의 모든 툴이 is_interrupted()로 abort("[interrupted]").
+  이것이 폼-무관(embedded/gateway/api-server/relay 모두 in-process) 동작이다.
+  resolver는 테스트를 위해 Monitor.__init__(interrupt_resolver=...)로 교체 가능하다.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+import urllib.error
+import urllib.request
 from typing import Any, Callable, Optional
 
 from . import events as _events
@@ -25,11 +32,29 @@ from .rules import RuleStore, normalize_path
 logger = logging.getLogger(__name__)
 
 
-def _noop_interrupt_resolver(**_kwargs: Any) -> None:
-    """기본 interrupt seam — M1에서는 아무것도 하지 않는다(no-op).
+def _default_interrupt_resolver(**_kwargs: Any) -> None:
+    """기본 interrupt resolver — 현재(실행) 스레드를 in-process로 interrupt한다.
 
-    M5에서 배포 폼별로 agent.interrupt() 등을 바인딩해 주입한다.
+    hermes의 tools.interrupt.set_interrupt(True)는 thread_id=None일 때 *현재 스레드*를
+    interrupted set에 추가한다. pre_tool_call hook은 에이전트 실행 스레드에서 동기
+    디스패치되므로, 이 호출은 같은 턴의 후속 툴을 전부 abort 시킨다(agent.interrupt()의
+    툴-abort 절반을 모듈 함수로 복제).
+
+    hermes 밖(테스트/독립 실행)에서는 tools.interrupt가 없으므로 ImportError를 흡수하고
+    조용히 반환한다 — 절대 예외를 밖으로 던지지 않는다(에이전트 루프 보호).
     """
+    try:
+        from tools.interrupt import set_interrupt  # type: ignore[import-not-found]
+    except Exception:
+        logger.debug(
+            "syncspace: tools.interrupt unavailable (not inside hermes); "
+            "skipping in-process interrupt"
+        )
+        return None
+    try:
+        set_interrupt(True)
+    except Exception:
+        logger.exception("syncspace: set_interrupt(True) failed (fail-open)")
     return None
 
 
@@ -58,6 +83,7 @@ class Monitor:
         rule_store: Optional[RuleStore] = None,
         emitter: Optional[EventEmitter] = None,
         interrupt_resolver: Optional[Callable[..., None]] = None,
+        poll_fn: Optional[Callable[..., Optional[dict]]] = None,
     ) -> None:
         self.config = config or load_config()
         self.rules = rule_store or RuleStore(self.config.rules_file)
@@ -66,10 +92,14 @@ class Monitor:
             timeout_s=self.config.emit_timeout_s,
             queue_maxsize=self.config.queue_maxsize,
         )
-        # interrupt seam: 기본 no-op. M5에서 교체.
+        # interrupt resolver: 기본은 in-process set_interrupt. 테스트는 fake 주입.
         self.interrupt_resolver: Callable[..., None] = (
-            interrupt_resolver or _noop_interrupt_resolver
+            interrupt_resolver or _default_interrupt_resolver
         )
+        # pending 폴 함수: 기본은 urllib GET. 테스트는 fake 주입(네트워크 없음).
+        self._poll_fn: Callable[..., Optional[dict]] = poll_fn or self._http_poll_pending
+        # M5 수동중지 폴 스로틀(monotonic). -inf = 아직 폴 안 함(첫 호출 즉시 허용).
+        self._last_interrupt_poll: float = float("-inf")
 
     # -- emit 헬퍼 -------------------------------------------------------
 
@@ -97,6 +127,105 @@ class Monitor:
             normalize_fn=normalize_path,
             detail_extra=detail_extra,
         )
+
+    # -- 수동중지 폴 (M5) ------------------------------------------------
+
+    def _http_poll_pending(
+        self, agent_id: str, session_id: Optional[str]
+    ) -> Optional[dict]:
+        """컬렉터 /control/pending GET (urllib, 타이트 타임아웃, fail-open).
+
+        계약: GET {pending_url}?agentId=<id>&sessionId=<id>
+              헤더 X-SyncSpace-Local: 1
+              응답 JSON {"interrupts":[{"id":n,"reason":str|null,"createdAt":iso}]}
+        컬렉터가 읽을 때 소비(각 pending interrupt 1회 반환).
+
+        반환: 파싱된 JSON dict, 또는 실패 시 None(예외 절대 전파 금지).
+        """
+        try:
+            from urllib.parse import urlencode
+
+            params = {"agentId": agent_id}
+            if session_id:
+                params["sessionId"] = session_id
+            url = self.config.pending_url + "?" + urlencode(params)
+            req = urllib.request.Request(
+                url,
+                method="GET",
+                headers={"X-SyncSpace-Local": "1"},
+            )
+            with urllib.request.urlopen(req, timeout=self.config.emit_timeout_s) as resp:
+                raw = resp.read()
+            return json.loads(raw.decode("utf-8"))
+        except (urllib.error.URLError, OSError, ValueError, TypeError):
+            # 네트워크/타임아웃/JSON 파싱 실패 → 조용히 스킵.
+            logger.debug("syncspace: pending poll failed (skip)", exc_info=True)
+            return None
+        except Exception:
+            # 그 외 어떤 예외도 hook으로 새어나가지 않는다.
+            logger.debug("syncspace: pending poll unexpected error (skip)", exc_info=True)
+            return None
+
+    def _poll_for_interrupt(
+        self,
+        agent_id: str,
+        session_id: Optional[str],
+        tool_name: str,
+        args: Any,
+        kwargs: dict,
+    ) -> Optional[dict]:
+        """스로틀된 pending 폴 → interrupt 발견 시 resolver 호출 + block 반환.
+
+        완전 fail-open: 어떤 예외도 삼키고 None(=차단 안 함) 반환.
+        반환: interrupt 있으면 {"action":"block","message":...}, 아니면 None.
+        """
+        try:
+            if not self.config.interrupt_poll_enabled:
+                return None
+            now = time.monotonic()
+            if (now - self._last_interrupt_poll) < self.config.interrupt_poll_min_interval_s:
+                return None
+            # 폴 시각 갱신(실패해도 갱신 — 폭주 방지).
+            self._last_interrupt_poll = now
+
+            data = self._poll_fn(agent_id, session_id)
+            if not isinstance(data, dict):
+                return None
+            interrupts = data.get("interrupts")
+            if not isinstance(interrupts, list) or not interrupts:
+                return None
+
+            first = interrupts[0] if isinstance(interrupts[0], dict) else {}
+            reason = first.get("reason") if isinstance(first, dict) else None
+            reason = reason if isinstance(reason, str) and reason else None
+
+            # in-process interrupt 트리거(실행 스레드 마킹). 예외 흡수.
+            try:
+                self.interrupt_resolver(
+                    reason=reason, agent_id=agent_id, session_id=session_id
+                )
+            except Exception:
+                logger.exception("syncspace: interrupt_resolver raised (fail-open)")
+
+            # 컬렉터가 이미 cancelled 이벤트를 기록/브로드캐스트했으므로
+            # detail.intervention 없이 status='blocked' 캡처만(중복 감사 방지).
+            self._safe_emit(
+                self._build(
+                    tool_name=tool_name,
+                    args=args,
+                    status="blocked",
+                    kwargs=kwargs,
+                    detail_extra=None,
+                )
+            )
+
+            message = "SyncSpace manual interrupt" + (
+                ": " + reason if reason else ""
+            )
+            return {"action": "block", "message": message}
+        except Exception:
+            logger.exception("syncspace: _poll_for_interrupt failed (fail-open)")
+            return None
 
     # -- pre_tool_call ---------------------------------------------------
 
@@ -185,6 +314,15 @@ class Monitor:
                     )
                 )
                 return {"action": "block", "message": message}
+
+            # 2.5 규칙 블록이 아니면 수동중지(M5) 스로틀 폴.
+            #     interrupt 발견 시 in-process로 실행 스레드를 interrupt하고 block 반환.
+            #     완전 fail-open(폴 실패는 절대 차단/예외로 이어지지 않음).
+            poll_block = self._poll_for_interrupt(
+                agent_id, session_id, tool_name, args, kwargs
+            )
+            if poll_block is not None:
+                return poll_block
 
             # 3. 차단 없음: 캡처 이벤트 emit (status=started).
             self._safe_emit(

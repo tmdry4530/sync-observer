@@ -180,7 +180,9 @@ export function registerCollectorRoutes(router: Router, deps: CollectorRouteDeps
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : ''
     if (!agentId) throw badRequest('missing_agent_id', 'agentId is required to interrupt an agent.')
     const sessionId = typeof body.sessionId === 'string' && body.sessionId.length > 0 ? body.sessionId : null
-    const reason = typeof body.reason === 'string' && body.reason.length > 0 ? body.reason : null
+    // reason flows to the agent's context via the plugin block message, so cap
+    // length + strip control chars (parity with the rule-field hardening).
+    const reason = sanitizeReason(body.reason)
     const ts = new Date().toISOString()
 
     const intervention = store.insertIntervention({
@@ -229,11 +231,29 @@ export function registerCollectorRoutes(router: Router, deps: CollectorRouteDeps
     const insert = store.insertEvent(syntheticEvent)
     if (insert.inserted) hub.publish(syntheticEvent)
 
+    // Queue the interrupt for the plugin to poll + enforce in-process (M5). The
+    // resolver seam below is the in-memory push path; this is the durable pull
+    // path the plugin drains via GET /control/pending.
+    store.enqueueInterrupt({ agentId, sessionId, reason })
+
     // Fire the seam (M5 binds this to the live agent). Never block the response
     // on a resolver failure — record-keeping already succeeded.
     void interruptResolver({ agentId, sessionId, reason }).catch(() => undefined)
 
     return json({ intervention })
+  })
+
+  // ---- Pending interrupt drain (plugin pull; loopback + origin + custom-header) -
+  // Consuming is a mutation (consume-once marks rows consumed_at), so it carries
+  // the same X-SyncSpace-Local CSRF guard as the other /control/* mutations even
+  // though it is a GET.
+  router.get('/control/pending', (ctx) => {
+    guardStateChange(ctx, allowedOrigins, { requireLocalHeader: true })
+    const agentId = (ctx.query.get('agentId') ?? '').trim()
+    if (!agentId) throw badRequest('missing_agent_id', 'agentId is required to drain pending interrupts.')
+    const sessionIdParam = ctx.query.get('sessionId')
+    const sessionId = sessionIdParam != null && sessionIdParam.length > 0 ? sessionIdParam : null
+    return json({ interrupts: store.consumePending(agentId, sessionId) })
   })
 }
 
@@ -484,4 +504,13 @@ function parseRuleInput(raw: unknown, index: number): RuleInput {
   if (scope.length > MAX_RULE_FIELD_LEN) throw badRequest('invalid_rule', `Rule "${id}" scope is too long.`)
   const enabled = typeof obj.enabled === 'boolean' ? obj.enabled : true
   return { id, kind: kind as RuleKind, glob, scope, enabled }
+}
+
+/** Sanitize an interrupt reason: non-empty string, control chars stripped,
+ *  length-capped. Returns null when absent/empty (parity with rule hardening). */
+function sanitizeReason(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  // eslint-disable-next-line no-control-regex
+  const cleaned = raw.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, MAX_RULE_FIELD_LEN)
+  return cleaned.length > 0 ? cleaned : null
 }

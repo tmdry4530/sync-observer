@@ -75,6 +75,20 @@ export interface InterventionInput {
   message?: string | null
 }
 
+/** A queued manual interrupt awaiting plugin pickup (M5). */
+export interface PendingInterrupt {
+  id: number
+  reason: string | null
+  createdAt: string
+}
+
+/** Input for enqueueing a pending interrupt (id/createdAt are managed by the store). */
+export interface PendingInterruptInput {
+  agentId: string
+  sessionId?: string | null
+  reason?: string | null
+}
+
 export interface EventsPage {
   events: ActivityEvent[]
   latestSeq: number
@@ -104,6 +118,15 @@ export interface CollectorStore {
   replaceAllRules(rules: RuleInput[]): CollectorRule[]
   insertIntervention(rec: InterventionInput): InterventionRecord
   listInterventions(limit?: number): InterventionRecord[]
+  /** Queue a manual interrupt for the plugin to poll + enforce (M5). */
+  enqueueInterrupt(rec: PendingInterruptInput): { id: number }
+  /**
+   * Consume (once) unconsumed interrupts for an agent. When sessionId is given,
+   * matches rows with a NULL session_id OR an equal session_id; when omitted,
+   * matches every unconsumed row for the agent. Marks them consumed in the same
+   * transaction so a second call returns [].
+   */
+  consumePending(agentId: string, sessionId?: string | null): PendingInterrupt[]
   /** Underlying handle (close on shutdown). */
   close(): void
 }
@@ -111,6 +134,10 @@ export interface CollectorStore {
 const DEFAULT_PAGE_LIMIT = 500
 const MAX_PAGE_LIMIT = 1000
 const DEFAULT_INTERVENTION_LIMIT = 200
+/** Pending interrupts older than this are never delivered (and are purged): a
+ *  manual interrupt that was never picked up must not fire on a later, unrelated
+ *  run of the same agentId. 5 minutes covers offline-agent + clock skew. */
+const PENDING_INTERRUPT_TTL_MS = 5 * 60_000
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS events (
@@ -160,6 +187,16 @@ CREATE TABLE IF NOT EXISTS interventions (
   message     TEXT,
   created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS pending_interrupts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent_id    TEXT NOT NULL,
+  session_id  TEXT,
+  reason      TEXT,
+  created_at  TEXT NOT NULL,
+  consumed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pending_agent ON pending_interrupts (agent_id, consumed_at);
 `
 
 interface EventRow {
@@ -204,6 +241,12 @@ interface InterventionRow {
   target_path: string | null
   event_id: string | null
   message: string | null
+  created_at: string
+}
+
+interface PendingInterruptRow {
+  id: number
+  reason: string | null
   created_at: string
 }
 
@@ -430,6 +473,75 @@ export function createCollectorStore(dbPath: string): CollectorStore {
     return rows.map(rowToIntervention)
   }
 
+  const enqueueInterruptStmt = db.prepare(`
+    INSERT INTO pending_interrupts (agent_id, session_id, reason, created_at, consumed_at)
+    VALUES (:agent_id, :session_id, :reason, :created_at, NULL)
+  `)
+
+  // The SELECT and UPDATE share an identical predicate. The :match_all flag (1
+  // when no sessionId was supplied) widens the match to every session for the
+  // agent; otherwise we match NULL-session rows OR the exact session. Both run
+  // inside one transaction, so the rows selected are exactly the rows updated.
+  // SELECT and UPDATE share a byte-identical predicate so the rows returned are
+  // exactly the rows marked consumed. created_at >= :min_created drops stale
+  // never-picked-up interrupts (TTL) so they can't fire on a later run.
+  const selectPendingStmt = db.prepare(`
+    SELECT id, reason, created_at
+    FROM pending_interrupts
+    WHERE consumed_at IS NULL
+      AND agent_id = :agent_id
+      AND created_at >= :min_created
+      AND (:match_all = 1 OR session_id IS NULL OR session_id = :session_id)
+    ORDER BY id ASC
+  `)
+  const consumePendingStmt = db.prepare(`
+    UPDATE pending_interrupts
+    SET consumed_at = :now
+    WHERE consumed_at IS NULL
+      AND agent_id = :agent_id
+      AND created_at >= :min_created
+      AND (:match_all = 1 OR session_id IS NULL OR session_id = :session_id)
+  `)
+  // Opportunistic GC: drop already-consumed rows and stale (expired) rows so the
+  // table can't grow without bound on a long-lived collector.
+  const purgePendingStmt = db.prepare(`
+    DELETE FROM pending_interrupts
+    WHERE consumed_at IS NOT NULL OR created_at < :min_created
+  `)
+
+  const enqueueInterrupt = (rec: PendingInterruptInput): { id: number } => {
+    const result = enqueueInterruptStmt.run({
+      agent_id: rec.agentId,
+      session_id: rec.sessionId ?? null,
+      reason: rec.reason ?? null,
+      created_at: new Date().toISOString()
+    })
+    return { id: Number(result.lastInsertRowid) }
+  }
+
+  const consumePending = (agentId: string, sessionId?: string | null): PendingInterrupt[] => {
+    // sessionId null/undefined → match every session for the agent.
+    const matchAll = sessionId == null ? 1 : 0
+    const minCreated = new Date(Date.now() - PENDING_INTERRUPT_TTL_MS).toISOString()
+    const params = {
+      agent_id: agentId,
+      session_id: sessionId ?? null,
+      match_all: matchAll,
+      min_created: minCreated
+    }
+    db.exec('BEGIN')
+    try {
+      const rows = selectPendingStmt.all(params) as unknown as PendingInterruptRow[]
+      consumePendingStmt.run({ ...params, now: new Date().toISOString() })
+      purgePendingStmt.run({ min_created: minCreated })
+      db.exec('COMMIT')
+      return rows.map((row) => ({ id: Number(row.id), reason: row.reason, createdAt: row.created_at }))
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   return {
     insertEvent,
     getEventsSince,
@@ -442,6 +554,8 @@ export function createCollectorStore(dbPath: string): CollectorStore {
     replaceAllRules,
     insertIntervention,
     listInterventions,
+    enqueueInterrupt,
+    consumePending,
     close: () => db.close()
   }
 }
