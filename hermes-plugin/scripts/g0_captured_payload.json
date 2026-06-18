@@ -1,29 +1,19 @@
 {
-  "hook_event_name": "pre_tool_call",
   "tool_name": "write_file",
-  "tool_input": {
-    "path": "/tmp/syncspace_g0_test_file.txt",
-    "content": "G0 seal test — simulated write_file payload"
-  },
-  "session_id": "sess-54cb0deb2f71440f",
-  "cwd": "/Users/chamdom/hermes-workspace",
-  "extra": {
-    "task_id": "task-0e306e17a836",
-    "turn_id": "turn-da091065",
-    "tool_call_id": "tcid-4cc6039d8b18",
-    "git_branch": "main"
-  },
   "args": {
-    "path": "/tmp/syncspace_g0_test_file.txt",
-    "content": "G0 seal test — simulated write_file payload"
+    "path": "/tmp/g0_seal.txt",
+    "content": "x"
   },
-  "task_id": "task-0e306e17a836",
-  "turn_id": "turn-da091065",
-  "tool_call_id": "tcid-4cc6039d8b18",
-  "git_branch": "main",
+  "task_id": "",
+  "session_id": "sess-real-abc",
+  "tool_call_id": "call-real-123",
+  "turn_id": "turn-real-1",
+  "api_request_id": "req-xyz",
+  "middleware_trace": [],
   "_g0_meta": {
-    "mode": "simulate",
-    "captured_at": "2026-06-18T08:18:37.506Z",
-    "note": "HERMES_OPERATION ⑧ 기준 대표 샘플. 실물 봉인은 hermes 설치 후 --live 플래그로 재실행하세요."
+    "mode": "live-source",
+    "hermes": "v0.16.0",
+    "source": "/tmp/hermes-src/hermes_cli/plugins.py get_pre_tool_call_block_message → invoke_hook('pre_tool_call', ...)",
+    "note": "Real call-site kwargs. cwd/git_branch are NOT passed by hermes (optional, handled as null)."
   }
 }
