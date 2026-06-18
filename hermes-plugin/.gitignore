@@ -1,0 +1,4 @@
+# Python bytecode / caches — the plugin is stdlib-only, no build artifacts tracked.
+__pycache__/
+*.py[cod]
+.pytest_cache/
