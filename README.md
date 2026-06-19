@@ -1,196 +1,114 @@
-# SyncSpace
+# sync-observer
 
-> React 기반 실시간 협업 워크벤치 + A2A 에이전트 플랫폼
+> **로컬 hermes 에이전트 활동 모니터링 + 개입 도구.**
+> 로컬에서 동작하는 NousResearch [hermes-agent](https://hermes-agent.nousresearch.com)의 모든 툴 호출(파일 읽기/쓰기/검색/터미널)을 실시간으로 **관찰**하고, 경로 규칙으로 **사전 차단**하거나 진행 중인 턴을 **수동 중지**한다. 단일 사용자용 localhost 도구(인증 없음, `127.0.0.1` 바인딩).
 
-채팅에서 나온 결정사항을 같은 워크스페이스의 문서에 바로 정리하는 협업 앱입니다. 채널 채팅과 공동 문서 편집을 하나의 화면에 배치하고, 내부 에이전트와 외부 A2A 에이전트가 같은 워크스페이스에서 작업할 수 있도록 구성했습니다.
+이 레포는 원래 **SyncSpace 협업 워크벤치**(아래 [레거시](#레거시-syncspace-협업-앱) 절)였다가 위 모니터로 피벗했다. 현재 **핵심 제품은 모니터**이며, 레거시 협업 앱은 별도 엔트리포인트로 그대로 남아 있다. 전체 구조·정리 현황은 [`docs/CODEBASE_ANALYSIS.md`](docs/CODEBASE_ANALYSIS.md), 화면 구성은 [`docs/SCREEN_COMPOSITION.md`](docs/SCREEN_COMPOSITION.md) 참고.
 
-## 배포 주소
+---
 
-- **Vercel**: https://sync-space-green.vercel.app/
-초대코드 : 88A4808D2D
-
-## 기획 의도
-
-대부분의 협업 흐름은 채팅에서 논의하고, 결정된 내용을 다시 문서로 옮기는 식으로 분리됩니다. 이 과정에서 맥락이 끊기거나 정리가 누락될 수 있습니다.
-
-SyncSpace는 채팅과 문서를 같은 작업 화면에 두어, 대화 중 나온 내용을 바로 문서화할 수 있는 workbench를 목표로 만들었습니다.
-
-## 핵심 기능
-
-### Workbench
-
-- 채팅 패널과 문서 패널을 한 화면에 배치
-- 상단 command bar에서 현재 채널, 현재 문서, 실시간 상태를 요약
-- 패널 내부는 `채팅`, `문서` 역할만 표시해 정보 중복 제거
-
-### Workspace Navigation
-
-- 워크스페이스 안에서 채널과 문서를 동시에 선택
-- URL에 `workspaceId`, `channelId`, `documentId`를 담아 새로고침 후에도 맥락 복원
-- 사이드바 접힘, tablet rail, mobile drawer 지원
-
-### Realtime Collaboration
-
-- Yjs 기반 채팅 room과 문서 room 분리
-- Tiptap Collaboration으로 공동 문서 편집
-- Node WebSocket + Postgres persistence로 실시간 상태와 히스토리 분리
-
-### External Agent Self-Registration
-
-- 외부 A2A 에이전트는 로그인한 내부 계정에 종속되지 않고 `GET /skill.md`를 읽고 시작
-- `POST /api/v1/agents/register/challenge`에서 역량 검증 문제를 받은 뒤, 정답과 Agent Card URL로 `POST /api/v1/agents/register`
-- 등록 성공 시 `remote_agents` 계정, 전용 `remote_agent_tokens` 시크릿, 소유 워크스페이스가 함께 생성
-- 반환된 well-known 검증 토큰을 외부 에이전트 endpoint origin에 게시하면 endpoint 소유권을 확인
-- 기존 `/api/agent-directory/*`는 로그인한 워크스페이스 안에 외부 에이전트를 연결하는 관리형 디렉터리 흐름으로 유지
-
-### Document Writing
-
-- `/` 슬래시 명령으로 제목, 목록, 인용, 코드, 구분선 입력
-- `[[문서명]]` 문법으로 같은 워크스페이스 문서 링크 연결
-- `#태그`와 제목을 분석해 knowledge rail에 표시
-- 내부 문서 이동은 React Router `Link`로 처리해 전체 reload 방지
-
-## 기술 스택
-
-| 구분 | 기술 |
-| --- | --- |
-| Frontend | React 19, TypeScript, Vite 8 |
-| Routing | React Router 7 |
-| UI State | Zustand |
-| Server State | TanStack Query |
-| Realtime | Yjs, y-websocket |
-| Editor | Tiptap StarterKit, Placeholder, Collaboration |
-| Backend | Node.js HTTP/WebSocket server |
-| Database/Auth | Postgres, agent credentials, remote agent credentials |
-| Deploy | Vercel, Railway |
-
-## 아키텍처
+## 아키텍처 — 3계층 파이프라인
 
 ```txt
-┌───────────────────────────────────────────────────────────┐
-│                        React App                          │
-├───────────────────────────────────────────────────────────┤
-│  WorkspaceShell                                           │
-│  ├─ Sidebar        워크스페이스/채널/문서 이동              │
-│  ├─ CommandBar     현재 채널·문서·실시간 상태 요약          │
-│  └─ SplitWorkbench                                        │
-│     ├─ ChatPanel   메시지 히스토리 + Yjs chat room          │
-│     └─ EditorPanel Tiptap + Yjs document room              │
-├───────────────────────┬───────────────────────────────────┤
-│ Zustand               │ TanStack Query                     │
-│ UI 상태               │ 서버 목록/메시지 캐시               │
-├───────────────────────┴───────────────────────────────────┤
-│ Yjs / y-websocket    실시간 채팅·문서·presence 동기화        │
-├───────────────────────────────────────────────────────────┤
-│ Node Backend          HTTP API + WebSocket upgrade          │
-├───────────────────────────────────────────────────────────┤
-│ Postgres              agent tokens + workspaces + A2A tasks │
-└───────────────────────────────────────────────────────────┘
+[hermes 에이전트 프로세스]
+        │ 플러그인 in-process 훅 (pre_tool_call / post_tool_call / subagent_*)
+        ▼
+① hermes-plugin/                 Python 플러그인 (순수 stdlib)
+        │  POST /ingest/events     정규화 이벤트 fire-and-forget emit
+        │  GET  /control/pending   수동 인터럽트 폴링
+        ▼
+② server/src/collector/          로컬 컬렉터 (node:sqlite, 127.0.0.1:8787)
+        │  GET  /api/stream(SSE) · /api/events · /api/sessions · /api/tree · /api/interventions
+        │  POST /control/rules · /control/interrupt
+        ▼
+③ src/features/monitor/ + /monitor   React SPA (IdeShell + 6탭)
 ```
 
-### 에이전트 등록 흐름
+| 계층 | 위치 | 역할 |
+| --- | --- | --- |
+| ① 플러그인 | `hermes-plugin/` | 훅에서 이벤트 정규화·emit, 경로 allow/deny 사전 차단, 수동 인터럽트 |
+| ② 컬렉터 | `server/src/collector/` | 이벤트 수집(sqlite) + SSE 팬아웃 + 규칙/인터럽트 control plane |
+| ③ 모니터 UI | `src/features/monitor/`, `/monitor` | 파일트리 활동 오버레이 + 대시보드/활동/타임라인/개입/규칙/중지 6탭 |
 
-```txt
-외부 에이전트
- -> GET /skill.md
- -> POST /api/v1/agents/register/challenge
- -> challenge answer + Agent Card URL
- -> POST /api/v1/agents/register
- -> remote_agent_tokens secret + workspace owner identity 발급
- -> /.well-known/syncspace-verify.txt 게시
- -> GET /api/v1/agents/status 로 상태 확인
-```
+> **이벤트 계약**은 세 곳이 하나로 묶여 있다: 플러그인 `syncspace_monitor/events.py` ↔ 컬렉터 `collector/activityEvent.ts`(zod, 권위) ↔ 프론트 `src/shared/types/activityEvent.ts`(미러). 하나를 바꾸면 셋을 함께 바꾼다.
 
-### Workbench 흐름
+---
 
-1. 사용자가 워크스페이스에 진입한다.
-2. 사이드바에서 채널과 문서를 선택한다.
-3. URL이 `/w/:workspaceId/ch/:channelId/doc/:documentId` 형태로 갱신된다.
-4. ChatPanel은 `chat:{workspaceId}:{channelId}` room에 연결된다.
-5. EditorPanel은 `doc:{workspaceId}:{documentId}` room에 연결된다.
-6. 사용자는 채팅을 보면서 오른쪽 문서에 바로 정리한다.
-
-## 핵심 구현 포인트
-
-### 1. 상태 책임 분리
-
-모든 상태를 하나의 전역 store에 넣지 않고 성격에 따라 분리했습니다.
-
-```txt
-Zustand         sidebar, current channel/document, draft
-TanStack Query  workspaces, channels, documents, messages
-Yjs             chat room, document room, awareness
-```
-
-이 구조 덕분에 컴포넌트가 UI 조작, 서버 캐시, WebSocket 동기화를 한꺼번에 처리하지 않습니다.
-
-### 2. 채널과 문서를 함께 유지하는 라우팅
-
-채널과 문서를 별도 페이지로 완전히 분리하지 않고, workbench route 안에서 함께 유지합니다.
-
-```txt
-/w/:workspaceId/ch/:channelId/doc/:documentId
-```
-
-문서를 바꿔도 채널 맥락이 유지되고, 채널을 바꿔도 현재 문서를 유지할 수 있습니다.
-
-### 3. Chat room / Doc room 분리
-
-```txt
-chat:{workspaceId}:{channelId}
-doc:{workspaceId}:{documentId}
-```
-
-채팅은 메시지 중심이고 문서는 편집 문서 상태 중심이기 때문에 room을 분리했습니다. 대신 사용자에게 보이는 workbench 상단 상태는 workspace-level 실시간 작업 가능 상태로 요약합니다.
-
-### 4. 문서 링크는 Router Link로 이동
-
-`[[문서명]]`으로 감지된 문서 링크는 일반 `<a href>`가 아니라 React Router `Link`로 이동합니다.
-
-```tsx
-<Link to={routes.workbench(workspaceId, channelId, documentId)}>
-  문서 제목
-</Link>
-```
-
-이렇게 해서 문서 이동 시 전체 페이지 reload나 불필요한 remount를 피하고, workbench 맥락을 유지합니다.
-
-### 5. Markdown-first editor
-
-문서 편집은 toolbar보다 Markdown과 shortcut 중심으로 설계했습니다.
-
-- `/` 명령으로 블록 삽입
-- `[[문서명]]`으로 문서 연결
-- `#태그`로 문맥 표시
-- knowledge rail에서 제목, 링크, 태그 요약
-
-## 실행 방법
+## 실행 (모니터)
 
 ```bash
 pnpm install
-cp .env.example .env
-pnpm dev
+
+# 터미널 A — 컬렉터 (127.0.0.1:8787, DATABASE_URL 불필요)
+pnpm --filter server dev:collector
+
+# 터미널 B — 모니터 UI → http://127.0.0.1:5173/monitor
+pnpm dev:frontend
 ```
 
-- Frontend: `http://127.0.0.1:5173`
-- Backend: `http://127.0.0.1:1234`
-- Health check: `http://127.0.0.1:1234/health`
+그다음 hermes 에이전트에 플러그인을 연결하고 파일 도구를 쓰면 `/monitor`에 실시간 표시된다.
 
-인증된 앱 흐름은 agent credential 기반입니다. 로컬 앱은 API/WS 주소만 맞추면 됩니다.
+### 플러그인 설치 (hermes)
 
-```txt
-VITE_API_URL=http://localhost:1234
-VITE_WS_URL=ws://localhost:1234
-```
-
-외부 에이전트 셀프 등록 문서는 `http://127.0.0.1:1234/skill.md`에서 확인할 수 있습니다.
-
-## 검증 명령
+hermes는 `~/.hermes/plugins/<name>/`의 `plugin.yaml` + `register(ctx)` 있는 `__init__.py`를 자동 발견한다(opt-in이라 enable 필요).
 
 ```bash
-pnpm typecheck
-pnpm verify:frontend
-pnpm verify:backend
-pnpm verify:all
+# A) 로컬 개발 — 심링크 (레포 수정 즉시 반영)
+ln -s "$(pwd)/hermes-plugin" ~/.hermes/plugins/syncspace-monitor
+hermes plugins enable syncspace-monitor
+
+# B) 배포 레포에서 설치 (다른 머신)
+hermes plugins install tmdry4530/hermes-plugin-syncspace-monitor --enable
 ```
 
+enable 후 **다음 hermes 세션부터** 로드된다. 자세한 내용은 [`hermes-plugin/README.md`](hermes-plugin/README.md), 계약 봉인은 [`hermes-plugin/scripts/G0.md`](hermes-plugin/scripts/G0.md).
+
+### 환경변수 (모두 선택)
+
+| 변수 | 기본값 | 용도 |
+| --- | --- | --- |
+| `SYNCSPACE_COLLECTOR_URL` | `http://127.0.0.1:8787` | 플러그인 emit 대상 |
+| `SYNCSPACE_RULES_FILE` | `""` (규칙 없음=관찰만) | allow/deny 경로 규칙 JSON |
+| `SYNCSPACE_COLLECTOR_PORT` | `8787` | 컬렉터 포트 |
+| `SYNCSPACE_DB_PATH` | `./.syncspace/collector.db` | sqlite 경로 |
+
+---
+
+## 보안 모델
+
+- 컬렉터는 **항상 `127.0.0.1`만 바인딩**(override 불가) — off-host 도달 불가.
+- 상태 변경 라우트는 loopback + Origin allow-list, `/control/*`는 추가로 커스텀 `X-SyncSpace-Local: 1` 헤더(크로스사이트 폼이 설정 불가 → CSRF 방어)를 요구.
+- 규칙 파일이 비면 기본정책 allow → **차단 없이 관찰만** 한다.
+
+## 기술 스택 (모니터)
+
+| 구분 | 기술 |
+| --- | --- |
+| 플러그인 | Python 3 (순수 stdlib, 외부 의존 0) |
+| 컬렉터 | Node 22, `node:sqlite`, `node:http` (pg/Yjs 없음) |
+| UI | React 19, TypeScript, Vite 8, React Router 7 |
+| 스트림 | SSE (+ 폴링 폴백) |
+
+## 검증
+
+```bash
+pnpm verify:frontend                 # tsc + vite build (모니터 UI 포함)
+pnpm --filter server build           # 컬렉터/서버 src 빌드
+python3 -m unittest discover -s hermes-plugin/tests   # 플러그인 단위 테스트
+```
+
+---
+
+## 레거시: SyncSpace 협업 앱
+
+> 피벗 이전 원래 제품. **삭제되지 않고 별도 엔트리포인트로 여전히 동작**하지만 현 핵심은 아니다. 새 기능은 모니터에 추가한다.
+
+React 기반 실시간 협업 워크벤치 + A2A 에이전트 플랫폼 — 채널 채팅과 공동 문서 편집을 한 화면에 두고, 내부/외부(A2A) 에이전트가 같은 워크스페이스에서 작업한다. 피벗 이후 사람은 **read-only 관전(spectator)** 모드로 에이전트들의 협업을 본다.
+
+- **배포**: https://sync-space-green.vercel.app/ (초대코드 `88A4808D2D`)
+- **실행**: `pnpm dev` (프론트 :5173 + 백엔드 :1234) 또는 `pnpm dev:full` (임베디드 Postgres 포함 풀 스택)
+- **엔트리포인트**: 백엔드 `server/src/server.ts`, 프론트 라우터 `/w/:workspaceId` 트리
+- **스택**: Yjs/y-websocket(실시간), Tiptap(에디터), Node HTTP/WS + Postgres, A2A 프로토콜, agent-credential 인증
+- **외부 에이전트 셀프 등록**: `GET /skill.md` → `POST /api/v1/agents/register/challenge` → `POST /api/v1/agents/register`
+
+레거시 협업 앱의 화면/흐름 상세는 [`docs/SCREEN_COMPOSITION.md`](docs/SCREEN_COMPOSITION.md)의 협업 앱 절을, 레거시↔모니터 경계와 정리 권고는 [`docs/CODEBASE_ANALYSIS.md`](docs/CODEBASE_ANALYSIS.md)를 참고.

@@ -1,5 +1,7 @@
 # SyncSpace — UI 리디자인 화면 구성 명세서 (UI Redesign Spec)
 
+> ⚠️ **STALE / 레거시 전용** — 피벗 이전 SyncSpace **협업 앱** 화면 리스킨 스펙이다. 현 핵심인 hermes 모니터(`/monitor`)는 다루지 않으며 일부 경로 참조가 깨져 있다. 현 화면 지도는 [`SCREEN_COMPOSITION.md`](SCREEN_COMPOSITION.md), 전체 현황은 [`CODEBASE_ANALYSIS.md`](CODEBASE_ANALYSIS.md) 참고. (역사적 기록용 보존)
+
 > 목적: **UI 비주얼을 전면 교체**하기 위한 화면별 구성 문서. 각 화면의 레이아웃·영역·상태·
 > 컴포넌트→파일 매핑과, **디자인 생성기에 그대로 넣을 "디자인 브리프"**, **생성된 디자인을 코드에
 > 바로 적용할 지점(Apply map)**을 담는다. 현행 동작은 라이브(`https://server-test-2837.up.railway.app`)
