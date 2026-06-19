@@ -11,6 +11,7 @@ import {
 import type { CollectorStore, RuleInput, RuleKind } from './store.js'
 import type { EventHub } from './hub.js'
 import { writeRulesFile } from './rulesFile.js'
+import { buildTree } from './tree.js'
 
 /**
  * Collector + control-plane HTTP routes (M2 §4).
@@ -171,6 +172,26 @@ export function registerCollectorRoutes(router: Router, deps: CollectorRouteDeps
     guardRead(ctx)
     const limit = parseIntParam(ctx.query.get('limit'), 200)
     return json({ interventions: store.listInterventions(limit) })
+  })
+
+  // ---- File tree (loopback only, read endpoint) -------------------------------
+  router.get('/api/tree', (ctx) => {
+    guardRead(ctx)
+    try {
+      return json(buildTree(store))
+    } catch (error) {
+      const code = (error as Error & { code?: string }).code
+      if (code === 'no_paths') {
+        return json(
+          { code: 'no_paths', message: '에이전트가 아직 파일을 접근하지 않았습니다.' },
+          404
+        )
+      }
+      throw internalError(
+        `Tree scan failed: ${error instanceof Error ? error.message : String(error)}`,
+        'tree_scan_failed'
+      )
+    }
   })
 
   // ---- Manual interrupt (loopback + origin + custom-header) --------------------

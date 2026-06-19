@@ -40,6 +40,40 @@ export function streamUrl(since: number): string {
   return `${collectorBase()}/api/stream?since=${since}`
 }
 
+// ---------------------------------------------------------------------------
+// File tree (GET /api/tree) — see .monitor-filetree-spec.md §A.
+// The server computes the LCA root of all touched paths and scans it (bounded).
+// Activity-overlay fields are NOT in this response; the frontend derives them
+// from the live event stream (see useFileTree).
+// ---------------------------------------------------------------------------
+
+export interface TreeNode {
+  name: string
+  path: string
+  type: 'dir' | 'file'
+  children?: TreeNode[]
+}
+
+export interface TreeResponse {
+  /** Absolute path of the computed LCA root, or null when there are no paths. */
+  root: string | null
+  tree: TreeNode[]
+  scannedAt: string
+  capped: boolean
+}
+
+const EMPTY_TREE: TreeResponse = { root: null, tree: [], scannedAt: '', capped: false }
+
+/** GET /api/tree — 404 (no events yet) resolves to an empty tree, not an error. */
+export async function fetchTree(signal?: AbortSignal): Promise<TreeResponse> {
+  // Only set `signal` when present (exactOptionalPropertyTypes rejects undefined).
+  const init: RequestInit = signal ? { signal } : {}
+  const res = await fetch(`${collectorBase()}/api/tree`, init)
+  if (res.status === 404) return EMPTY_TREE
+  if (!res.ok) throw new Error(`collector /api/tree ${res.status}`)
+  return (await res.json()) as TreeResponse
+}
+
 /** Per-session rollup for the dashboard (GET /api/sessions). */
 export interface SessionSummary {
   sessionId: string
@@ -110,6 +144,7 @@ export interface InterventionRecord {
   ruleId: string | null
   mode: string
   trigger: string
+  targetPath: string | null
   message: string | null
   createdAt: string
 }

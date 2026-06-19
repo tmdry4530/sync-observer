@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { listInterventions, type InterventionRecord } from '../collectorClient'
 import { usePolledResource } from '../hooks/usePolledResource'
+import { PathFilterNotice } from '../pathFilter'
 import { relativeTime, formatEventTime } from '../../missions/missionTime'
 
 /**
@@ -15,10 +16,25 @@ const MODE_LABEL: Record<string, string> = {
   kill: '강제종료(kill)'
 }
 
-export function InterventionsLog() {
+export function InterventionsLog({
+  pathFilter,
+  onClearFilter
+}: {
+  pathFilter?: string | null
+  onClearFilter?: () => void
+} = {}) {
   const fetcher = useCallback((signal: AbortSignal) => listInterventions(200, signal), [])
   const { data, error, loading } = usePolledResource<InterventionRecord[]>(fetcher, 3000)
-  const records = data ?? []
+  const all = data ?? []
+  // Narrow to interventions whose target path is the selected node or under it,
+  // matching the cross-pane filter semantics in pathFilter.ts.
+  const records = pathFilter
+    ? all.filter((r) => {
+        if (!r.targetPath) return false
+        const prefix = pathFilter.endsWith('/') ? pathFilter : pathFilter + '/'
+        return r.targetPath === pathFilter || r.targetPath.startsWith(prefix)
+      })
+    : all
 
   return (
     <section className="monitor-interventions" aria-label="개입 로그">
@@ -35,10 +51,16 @@ export function InterventionsLog() {
         </p>
       ) : null}
 
-      {loading && records.length === 0 ? (
+      <PathFilterNotice pathFilter={pathFilter ?? null} onClear={onClearFilter} />
+
+      {loading && all.length === 0 ? (
         <p className="monitor-muted">개입 이력을 불러오는 중…</p>
       ) : records.length === 0 ? (
-        <p className="monitor-empty">아직 차단되거나 중지된 작업이 없습니다.</p>
+        <p className="monitor-empty">
+          {pathFilter
+            ? '선택한 경로와 관련된 차단·중지 이력이 없습니다.'
+            : '아직 차단되거나 중지된 작업이 없습니다.'}
+        </p>
       ) : (
         <ol className="monitor-list">
           {records.map((r) => (

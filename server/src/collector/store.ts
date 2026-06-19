@@ -109,6 +109,8 @@ export interface CollectorStore {
   getEventsSinceWithSeq(since: number, limit?: number): SeqEvent[]
   /** Per-session rollups, most-recently-active first. */
   listSessions(): SessionSummary[]
+  /** Every event's `paths` array (for the file-tree LCA scan). */
+  getAllPaths(): string[][]
   /** Events for one session with seq > `since`, ascending. */
   getSessionEvents(sessionId: string, since?: number, limit?: number): EventsPage
   listRules(): CollectorRule[]
@@ -371,6 +373,15 @@ export function createCollectorStore(dbPath: string): CollectorStore {
     }))
   }
 
+  // Bounded to the most recent rows: the file-tree only needs the dirs the agent
+  // is *currently* touching, and this is re-read on every 3s /api/tree poll. An
+  // unbounded SELECT would grow O(total-events) per poll on a long-lived collector.
+  const allPathsStmt = db.prepare('SELECT paths FROM events ORDER BY seq DESC LIMIT 2000')
+  const getAllPaths = (): string[][] => {
+    const rows = allPathsStmt.all() as unknown as Array<{ paths: string }>
+    return rows.map((r) => parseJsonArray(r.paths))
+  }
+
   const listRulesStmt = db.prepare('SELECT * FROM rules ORDER BY created_at ASC, id ASC')
   const upsertRuleStmt = db.prepare(`
     INSERT INTO rules (id, kind, glob, scope, enabled, created_at, updated_at)
@@ -547,6 +558,7 @@ export function createCollectorStore(dbPath: string): CollectorStore {
     getEventsSince,
     getEventsSinceWithSeq,
     listSessions,
+    getAllPaths,
     getSessionEvents,
     listRules,
     upsertRule,

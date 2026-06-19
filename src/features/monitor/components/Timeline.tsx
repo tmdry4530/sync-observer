@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { fetchSessionEvents, listSessions, type EventsPage, type SessionSummary } from '../collectorClient'
 import { usePolledResource } from '../hooks/usePolledResource'
+import { filterEventsByPath, PathFilterNotice } from '../pathFilter'
 import { ActivityRow } from './activityDisplay'
 
 /**
@@ -13,10 +14,14 @@ const EMPTY_PAGE: EventsPage = { events: [], latestSeq: 0 }
 
 export function Timeline({
   sessionId,
-  onSelectSession
+  onSelectSession,
+  pathFilter,
+  onClearFilter
 }: {
   sessionId: string | null
   onSelectSession: (sessionId: string) => void
+  pathFilter?: string | null
+  onClearFilter?: () => void
 }) {
   const sessionsFetcher = useCallback((signal: AbortSignal) => listSessions(signal), [])
   const { data: sessionsData } = usePolledResource<SessionSummary[]>(sessionsFetcher, 5000)
@@ -33,7 +38,7 @@ export function Timeline({
     [sessionId]
   )
   const { data, error, loading } = usePolledResource<EventsPage>(eventsFetcher, 2000)
-  const events = data?.events ?? []
+  const events = filterEventsByPath(data?.events ?? [], pathFilter ?? null)
 
   return (
     <section className="monitor-timeline-view" aria-label="툴콜 타임라인">
@@ -67,12 +72,16 @@ export function Timeline({
         </p>
       ) : null}
 
+      <PathFilterNotice pathFilter={pathFilter ?? null} onClear={onClearFilter} />
+
       {!sessionId ? (
         <p className="monitor-empty">세션을 선택하면 해당 세션의 툴콜 타임라인이 표시됩니다.</p>
       ) : loading && events.length === 0 ? (
         <p className="monitor-muted">타임라인을 불러오는 중…</p>
       ) : events.length === 0 ? (
-        <p className="monitor-empty">이 세션에는 아직 활동이 없습니다.</p>
+        <p className="monitor-empty">
+          {pathFilter ? '선택한 경로와 관련된 활동이 없습니다.' : '이 세션에는 아직 활동이 없습니다.'}
+        </p>
       ) : (
         <ol className="monitor-list">
           {events.map((ev) => (
