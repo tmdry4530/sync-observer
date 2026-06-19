@@ -7,6 +7,9 @@ server/dist/
 !.env.example
 .syncspace-data/
 server/.syncspace-data/
+# Collector runtime DB + rules (default SYNCSPACE_DB_PATH = ./.syncspace/collector.db)
+.syncspace/
+server/.syncspace/
 .vite/
 
 # Keep repository Markdown limited to the root README; keep local presentation/docs drafts untracked.
