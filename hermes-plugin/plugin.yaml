@@ -1,5 +1,6 @@
 name: syncspace-monitor
 version: "0.1.0"
+manifest_version: 1
 description: "SyncSpace — NousResearch/hermes-agent 전용 로컬 활동 모니터링 + 개입 플러그인. pre_tool_call에서 경로 규칙(allow/deny, deny-overrides, realpath)을 평가해 1급 파일 툴(read/write/patch/search)과 terminal을 실행 전 pre-block하고, 모든 도구 호출을 PIVOT §3 정규화 이벤트로 컬렉터에 fire-and-forget emit한다. 순수 stdlib, 외부 의존 0. interrupt(M5)·컬렉터 push 규칙(M2)는 seam으로만 남김."
 author: "SyncSpace"
 hooks:
