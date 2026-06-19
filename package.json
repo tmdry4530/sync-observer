@@ -17,18 +17,9 @@
     "test:server": "pnpm --filter server test"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.100.7",
-    "@tiptap/extension-collaboration": "^3.22.5",
-    "@tiptap/extension-placeholder": "^3.22.5",
-    "@tiptap/react": "^3.22.5",
-    "@tiptap/starter-kit": "^3.22.5",
-    "lucide-react": "^1.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-router-dom": "^7.17.0",
-    "y-websocket": "^3.0.0",
-    "yjs": "^13.6.30",
-    "zustand": "^5.0.12"
+    "react-router-dom": "^7.17.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
