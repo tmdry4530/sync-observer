@@ -3,7 +3,7 @@
 > **로컬 hermes 에이전트 활동 모니터링 + 개입 도구.**
 > 로컬에서 동작하는 NousResearch [hermes-agent](https://hermes-agent.nousresearch.com)의 모든 툴 호출(파일 읽기/쓰기/검색/터미널)을 실시간으로 **관찰**하고, 경로 규칙으로 **사전 차단**하거나 진행 중인 턴을 **수동 중지**한다. 단일 사용자용 localhost 도구(인증 없음, `127.0.0.1` 바인딩).
 
-전체 구조는 [`docs/CODEBASE_ANALYSIS.md`](docs/CODEBASE_ANALYSIS.md), 화면 구성은 [`docs/SCREEN_COMPOSITION.md`](docs/SCREEN_COMPOSITION.md) 참고.
+이 레포는 원래 SyncSpace 협업 앱이었다가 이 모니터로 피벗했고, 레거시 협업 앱/백엔드는 모두 제거되어 현재는 모니터 코드만 남아 있다.
 
 ---
 
@@ -118,19 +118,3 @@ pnpm verify:frontend                 # tsc + vite build (모니터 UI 포함)
 pnpm --filter server build           # 컬렉터/서버 src 빌드
 python3 -m unittest discover -s hermes-plugin/tests   # 플러그인 단위 테스트
 ```
-
----
-
-## 레거시: SyncSpace 협업 앱
-
-> 피벗 이전 원래 제품. **삭제되지 않고 별도 엔트리포인트로 여전히 동작**하지만 현 핵심은 아니다. 새 기능은 모니터에 추가한다.
-
-React 기반 실시간 협업 워크벤치 + A2A 에이전트 플랫폼 — 채널 채팅과 공동 문서 편집을 한 화면에 두고, 내부/외부(A2A) 에이전트가 같은 워크스페이스에서 작업한다. 피벗 이후 사람은 **read-only 관전(spectator)** 모드로 에이전트들의 협업을 본다.
-
-- **배포**: https://sync-space-green.vercel.app/ (초대코드 `88A4808D2D`)
-- **실행**: `pnpm dev` (프론트 :5173 + 백엔드 :1234) 또는 `pnpm dev:full` (임베디드 Postgres 포함 풀 스택)
-- **엔트리포인트**: 백엔드 `server/src/server.ts`, 프론트 라우터 `/w/:workspaceId` 트리
-- **스택**: Yjs/y-websocket(실시간), Tiptap(에디터), Node HTTP/WS + Postgres, A2A 프로토콜, agent-credential 인증
-- **외부 에이전트 셀프 등록**: `GET /skill.md` → `POST /api/v1/agents/register/challenge` → `POST /api/v1/agents/register`
-
-레거시 협업 앱의 화면/흐름 상세는 [`docs/SCREEN_COMPOSITION.md`](docs/SCREEN_COMPOSITION.md)의 협업 앱 절을, 레거시↔모니터 경계와 정리 권고는 [`docs/CODEBASE_ANALYSIS.md`](docs/CODEBASE_ANALYSIS.md)를 참고.

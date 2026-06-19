@@ -9,7 +9,7 @@
 #   Railway > agent-worker service > Settings > Config-as-code path = railway.worker.toml
 #
 # 필요한 env: DATABASE_URL, AGENT_TOKEN_PEPPER 등 api 서비스와 동일한 DB/Auth env + WORKER_ID, AGENT_WORKER_ENABLED,
-#   PUSH_WORKER_ENABLED. 자세한 목록은 docs/migration/env_inventory.md 참고.
+#   PUSH_WORKER_ENABLED.
 
 [build]
 builder = "NIXPACKS"

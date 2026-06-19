@@ -12,7 +12,6 @@
 #   A2A_INTERFACE_URL, A2A_AGENT_CARD_URL, WS_AUTH_MODE, ALLOWED_ORIGINS,
 #   SYNCSPACE_DOC_PERSISTENCE_MODE, LOG_LEVEL, NODE_ENV, HOST, PORT.
 #   Agent credential/A2A persistence 기능은 DATABASE_URL + AGENT_TOKEN_PEPPER 필요.
-#   자세한 목록은 docs/migration/env_inventory.md 참고.
 
 [build]
 builder = "NIXPACKS"
