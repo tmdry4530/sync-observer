@@ -68,19 +68,13 @@ pnpm dev:frontend                    # 터미널 B — 모니터 UI → http://1
 
 (`pnpm dev` 하나로 둘 다 띄울 수도 있다 — `scripts/dev-all.sh`.) hermes 에이전트에 플러그인을 연결하고 파일 도구를 쓰면 `/monitor`에 실시간 표시된다.
 
-### 플러그인 수동 설치 (hermes)
+### 플러그인 수동 연결 (hermes)
 
-`install.sh`가 자동으로 처리하지만, 직접 하려면:
-
-hermes는 `~/.hermes/plugins/<name>/`의 `plugin.yaml` + `register(ctx)` 있는 `__init__.py`를 자동 발견한다(opt-in이라 enable 필요).
+`install.sh`(curl)가 자동으로 처리하지만, 직접 연결하려면 — hermes는 `~/.hermes/plugins/<name>/`의 `plugin.yaml` + `register(ctx)` 있는 `__init__.py`를 자동 발견한다(opt-in이라 enable 필요):
 
 ```bash
-# A) 로컬 개발 — 심링크 (레포 수정 즉시 반영)
 ln -s "$(pwd)/hermes-plugin" ~/.hermes/plugins/syncspace-monitor
 hermes plugins enable syncspace-monitor
-
-# B) 배포 레포에서 설치 (다른 머신)
-hermes plugins install tmdry4530/hermes-plugin-syncspace-monitor --enable
 ```
 
 enable 후 **다음 hermes 세션부터** 로드된다. 자세한 내용은 [`hermes-plugin/README.md`](hermes-plugin/README.md), 계약 봉인은 [`hermes-plugin/scripts/G0.md`](hermes-plugin/scripts/G0.md).

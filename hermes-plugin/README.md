@@ -13,26 +13,22 @@ hermes 에이전트의 모든 도구 호출(`read_file`/`write_file`/`patch`/`se
 
 ## 설치
 
-> ⚠️ `hermes plugins install`은 **레포 루트 = 플러그인**을 기대한다(서브디렉터리 미지원).
-> 클론 후 루트의 `plugin.yaml`을 읽고 클론 전체를 `~/.hermes/plugins/<name>/`로 옮긴다.
-> 따라서 이 플러그인은 **이 디렉터리가 루트인 standalone 저장소**로 배포해야 한다.
-
-### A) Git 저장소에서 설치 (배포용)
+플러그인 연결은 **sync-observer 설치기(curl 한 줄)가 자동 처리**한다 — 따로 설치할 필요 없다:
 
 ```bash
-hermes plugins install <owner>/<repo> --enable
-# 설치 위치: ~/.hermes/plugins/syncspace-monitor  (manifest name 기준)
+curl -fsSL https://raw.githubusercontent.com/tmdry4530/sync-observer/main/install.sh | bash
 ```
 
-### B) 로컬 개발 (이 모노레포에서 작업 중일 때)
+설치기가 이 디렉터리를 `~/.hermes/plugins/syncspace-monitor`로 심링크하고 `hermes plugins enable` 한다.
+
+수동으로 연결하려면(개발 중 등):
 
 ```bash
-# 이 디렉터리를 hermes 사용자 플러그인 폴더에 심링크
 ln -s "$(pwd)" ~/.hermes/plugins/syncspace-monitor
 hermes plugins enable syncspace-monitor
 ```
 
-둘 다 hermes는 opt-in이라 `enable` 후 **다음 세션부터** 로드된다.
+hermes는 opt-in이라 `enable` 후 **다음 세션부터** 로드된다.
 확인: `hermes plugins list` → `syncspace-monitor … enabled`.
 
 ## 컬렉터 연결
