@@ -6,6 +6,7 @@
   "main": "dist/collector/main.js",
   "scripts": {
     "dev:collector": "tsx watch src/collector/main.ts",
+    "serve:collector": "tsx src/collector/main.ts",
     "start:collector": "node dist/collector/main.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

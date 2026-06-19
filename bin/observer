@@ -48,7 +48,9 @@ start_one() { # name  pnpm-args...
 cmd_start() {
   ensure_installed
   mkdir -p "$RUN"
-  start_one collector pnpm --filter server dev:collector
+  # 'serve' (non-watch): the collector writes its sqlite db into the project
+  # tree, which a file-watcher would treat as a change and restart-churn on.
+  start_one collector pnpm --filter server serve:collector
   start_one ui        pnpm dev:frontend
   printf '\033[1;36m[observer]\033[0m UI 기동 대기'
   local i
