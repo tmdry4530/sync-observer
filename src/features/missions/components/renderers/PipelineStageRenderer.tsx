@@ -1,5 +1,5 @@
 import type { PipelineStageEvent } from '../../../../shared/types/engineeringEvents'
-import { formatEventTime } from '../../missionTime'
+import { formatEventTime } from '../../../../shared/utils/missionTime'
 import { RawInspect } from './RawInspect'
 import { statusPillClass, type PillStatus } from './statusPill'
 

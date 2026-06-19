@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { listInterventions, type InterventionRecord } from '../collectorClient'
 import { usePolledResource } from '../hooks/usePolledResource'
 import { PathFilterNotice } from '../pathFilter'
-import { relativeTime, formatEventTime } from '../../missions/missionTime'
+import { relativeTime, formatEventTime } from '../../../shared/utils/missionTime'
 
 /**
  * Interventions log (M4) — the audit trail of every block / interrupt, polled

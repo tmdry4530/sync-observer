@@ -1,6 +1,6 @@
 import type { EngineeringMissionEvent } from '../hooks/useMissionQuery'
 import type { EngineeringEventKind } from '../../../shared/types/engineeringEvents'
-import { eventDisplayTime, relativeTime } from '../missionTime'
+import { eventDisplayTime, relativeTime } from '../../../shared/utils/missionTime'
 
 const KIND_ICON: Record<EngineeringEventKind, string> = {
   agent_status: '🤖',

@@ -115,7 +115,6 @@
 .hero-card h1,
 .workspace-index-header h1,
 .section-header h1,
-.workspace-overview h1,
 .workspace-canvas-heading h1,
 .contract-card h1,
 .mission-view h1 {
@@ -931,28 +930,6 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; box-shadow
 .spectator-note { border-top: 1px solid var(--line); padding: 0.7rem 0.9rem; margin: 0; font-size: 0.8rem; color: var(--text-muted, var(--muted)); background: var(--surface-low, var(--surface)); text-align: center; }
 
 .editor-panel .presence-bar { height: 36px; padding: 0 1rem; background: var(--surface-low); }
-.editor-toolbar {
-  display: flex;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-  align-items: center;
-  padding: 0.5rem 0.65rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-.editor-toolbar button {
-  min-height: 32px;
-  border-radius: var(--radius);
-  padding: 0.35rem 0.56rem;
-  border-color: transparent;
-  color: var(--muted-strong);
-  background: transparent;
-  font-size: 0.76rem;
-}
-.editor-toolbar button.wide { padding-inline: 0.65rem; }
-.editor-toolbar button:hover { background: var(--surface-mid); box-shadow: none; }
-.editor-toolbar button.active { background: var(--primary); color: var(--surface); }
-.editor-toolbar-separator { width: 1px; align-self: stretch; min-height: 24px; background: var(--line); margin: 0 0.2rem; }
 .editor-workspace {
   min-height: 0;
   display: grid;
@@ -1205,13 +1182,6 @@ button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; box-shadow
 .contract-list p { color: var(--muted); line-height: 1.6; }
 .contract-section pre { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; background: var(--code-bg); color: var(--code-text); }
 .not-found { margin: 4rem; }
-
-.workspace-overview { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); padding: clamp(1.5rem, 5vw, 3rem); min-height: 24rem; box-shadow: var(--shadow-soft); }
-.workspace-overview h1 { margin: 0 0 1rem; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; letter-spacing: -0.07em; word-break: keep-all; text-wrap: balance; }
-.workspace-overview p { color: var(--muted); line-height: 1.8; max-width: 48rem; }
-.overview-stats { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem; }
-.overview-stats span { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 1rem; background: var(--surface-low); color: var(--muted); }
-.overview-stats strong { display: block; color: var(--primary); font-size: 2rem; }
 
 @media (max-width: 920px) {
   .landing-nav nav { display: none; }

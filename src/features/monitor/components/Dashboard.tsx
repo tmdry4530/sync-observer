@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { listSessions, type SessionSummary } from '../collectorClient'
 import { usePolledResource } from '../hooks/usePolledResource'
-import { relativeTime, formatEventTime } from '../../missions/missionTime'
+import { relativeTime, formatEventTime } from '../../../shared/utils/missionTime'
 
 /**
  * Live Agent Dashboard (M4) — one lane per session, most-recently-active first.

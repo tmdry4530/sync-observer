@@ -4,7 +4,7 @@ import {
   type ActivityEvent,
   type ActivityStatus
 } from '../../../shared/types/activityEvent'
-import { relativeTime, formatEventTime } from '../../missions/missionTime'
+import { relativeTime, formatEventTime } from '../../../shared/utils/missionTime'
 
 /**
  * Shared presentation for one ActivityEvent — used by both the Live Feed and the

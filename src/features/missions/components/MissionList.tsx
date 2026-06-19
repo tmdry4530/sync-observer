@@ -3,7 +3,7 @@ import { ClipboardList } from 'lucide-react'
 import { useWorkspaceMissionsQuery } from '../queries/useWorkspaceMissionsQuery'
 import { routes } from '../../../app/router/routes'
 import type { WorkspaceMissionSummary } from '../../../shared/types/missions'
-import { relativeTime } from '../missionTime'
+import { relativeTime } from '../../../shared/utils/missionTime'
 import '../../../styles/apple/mission-list.css'
 
 // ── helpers ──────────────────────────────────────────────────────────────────

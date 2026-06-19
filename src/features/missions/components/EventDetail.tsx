@@ -1,6 +1,6 @@
 import type { EngineeringMissionEvent } from '../hooks/useMissionQuery'
 import type { EngineeringEvent } from '../../../shared/types/engineeringEvents'
-import { eventDisplayTime, formatEventTime } from '../missionTime'
+import { eventDisplayTime, formatEventTime } from '../../../shared/utils/missionTime'
 import { DiffRenderer } from './renderers/DiffRenderer'
 import { CommandRenderer } from './renderers/CommandRenderer'
 import { TestResultRenderer } from './renderers/TestResultRenderer'
